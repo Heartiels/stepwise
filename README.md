@@ -27,180 +27,221 @@ This repo is built for a course project and focuses on:
   ```bash
   node -v
   npm -v
-- Windows tip: if node/npm/npx not found, it usually means Node was not added to PATH. Reinstall Node and enable “Add to PATH”.
+> Windows tip: if node/npm/npx not found, it usually means Node was not added to PATH. Reinstall Node and enable “Add to PATH”.
 
 ### 2) Install Git
-- Verify:
+
+* Verify:
+
   ```bash
   git --version
+  ```
+* If Git is not installed:
+
+  * Windows: install **Git for Windows**
+  * macOS: install **Xcode Command Line Tools**:
+
+    ```bash
+    xcode-select --install
+    ```
 
 ### 3) Install Expo Go on your phone
-- iOS: install Expo Go from the App Store
-- Android: install Expo Go from Google Play
-You will run the app on your phone by scanning a QR code.
+
+* iOS: install **Expo Go** from the App Store
+* Android: install **Expo Go** from Google Play
+* You will run the app on your phone by scanning a QR code.
 
 ---
 
 ## Getting Started (Run the App)
-Step 1 — Clone the repo
+
+### Step 1 — Clone the repo
+
+```bash
 git clone https://github.com/Heartiels/stepwise.git
 cd stepwise
+```
 
+> IMPORTANT: the **repo root** is the folder that contains `package.json`.
+> Make sure you run all commands **inside that folder**.
 
-IMPORTANT: the repo root is the folder that contains package.json.
-Make sure you run commands inside that folder.
+### Step 2 — Install dependencies
 
-Step 2 — Install dependencies
+```bash
 npm install
+```
 
-Step 3 — Start the dev server
+### Step 3 — Start the dev server
+
+```bash
 npx expo start
+```
 
+* You will see a QR code in the terminal.
 
-You will see a QR code in the terminal.
+### Step 4 — Open on your phone
 
-Step 4 — Open on your phone
+* Connect your phone and your computer to the **same Wi-Fi**
+* Open **Expo Go**
+* Scan the QR code:
 
-Connect your phone and your computer to the same Wi-Fi
+  * iOS: use **Camera** app (or scan inside Expo Go)
+  * Android: scan inside Expo Go
 
-Open Expo Go
+> If everything is correct, the app should open within a few seconds.
 
-Scan the QR code:
+---
 
-iOS: open Camera app or scan inside Expo Go
+## Network / QR Code Troubleshooting (Very Common)
 
-Android: scan inside Expo Go
+### ✅ Best practice checklist
 
-If everything is correct, the app opens within a few seconds.
+* Phone and laptop on the **same network** (same Wi-Fi)
+* Turn off **VPN / proxy** on both phone and laptop
+* Allow Node/Expo through firewall (especially on Windows)
 
-Network / QR Code Troubleshooting (Very Common)
-✅ Best practice checklist
+### If campus Wi-Fi blocks LAN discovery: use tunnel mode
 
-Phone and laptop on the same network (same Wi-Fi)
-
-Turn off VPN / proxy on both phone and laptop
-
-Allow Node/Expo through firewall:
-
-Windows Defender Firewall may block Metro bundler
-
-If campus Wi-Fi blocks LAN discovery, use tunnel mode:
-
+```bash
 npx expo start --tunnel
+```
 
-“Not found / No usable data / Cannot connect”
+### “Not found / No usable data / Cannot connect”
 
 Try these in order:
 
-Restart Expo:
+1. Restart Expo with clean cache:
 
+```bash
 npx expo start --clear
+```
 
+2. Use tunnel:
 
-Use tunnel:
-
+```bash
 npx expo start --tunnel
+```
 
+3. Check firewall (Windows):
 
-Check firewall (Windows):
+* If you see a popup asking for permission, click **Allow**
+* If no popup appears, manually allow **Node.js** network access in Windows Defender Firewall
 
-Allow Node.js / Expo CLI network access when prompted
+4. Switch network:
 
-If no prompt appears, manually allow Node in firewall settings
+* If you’re on a restricted/campus network, try **phone hotspot**
 
-Switch network:
+---
 
-If you’re on a restricted/campus network, try phone hotspot
+## Platform Notes (Windows vs macOS)
 
-Platform Notes (Windows vs macOS)
-✅ Windows + macOS teammates (Git) — any conflict?
+### ✅ Windows + macOS teammates (Git) — any conflict?
 
 No major conflict if we follow these rules:
 
-Always use npm install locally, do not commit node_modules
+* Always run `npm install` locally (**do not commit `node_modules/`**)
+* Avoid OS-specific absolute paths in code
+* Use consistent line endings (**LF**) to reduce diff noise
 
-Avoid OS-specific paths in code
+### Recommended Git settings (Windows)
 
-Use consistent line endings (LF) to reduce diff noise
+Run inside the repo:
 
-Recommended git setting:
-
-Windows: set Git to keep LF
-
+```bash
 git config core.autocrlf false
 git config core.eol lf
+```
 
+> Tip: a `.gitattributes` file can enforce LF for the whole repo.
 
-We also recommend adding .gitattributes to enforce LF (already included / should be included).
+---
 
-Local Database (SQLite)
+## Local Database (SQLite)
 
-We use expo-sqlite to store tasks locally on the device.
+* We use `expo-sqlite` to store tasks locally on the device.
+* Data is saved on your phone/simulator, **not in the repo**.
+* If you reinstall Expo Go or clear app storage, the DB resets.
 
-Data is saved on your phone/simulator, not in the repo.
+---
 
-If you reinstall Expo Go or clear app storage, the DB resets.
+## Common Commands
 
-Common Commands
+* Start (normal):
 
-Start (normal):
+  ```bash
+  npx expo start
+  ```
 
-npx expo start
+* Start with clean cache:
 
+  ```bash
+  npx expo start --clear
+  ```
 
-Start with clean cache:
+* Start with tunnel (for strict networks):
 
-npx expo start --clear
+  ```bash
+  npx expo start --tunnel
+  ```
 
+---
 
-Start with tunnel (for strict networks):
+## Project Structure (High-level)
 
-npx expo start --tunnel
+* `app/` — screens & routes (expo-router)
+* `src/` — app logic (db, helpers, etc.)
+* `src/db/` — SQLite client, schema, repos
+* `assets/` — icons & images
 
-Project Structure (High-level)
+---
 
-app/ — screens & routes (expo-router)
+## Contributing / Workflow
 
-src/ — app logic (db, helpers, etc.)
+### Suggested branch workflow
 
-src/db/ — SQLite client, schema, repos
+1. Create a feature branch:
 
-assets/ — icons & images
-
-Contributing / Workflow
-
-Suggested branch workflow:
-
-Create a feature branch:
-
+```bash
 git checkout -b feat/your-feature
+```
 
+2. Commit and push:
 
-Commit and push:
-
+```bash
 git add .
 git commit -m "feat: your feature"
 git push -u origin feat/your-feature
+```
 
+3. Open a Pull Request on GitHub
 
-Open a Pull Request on GitHub.
+---
 
-FAQ
-Q1: I can run the server but the phone can’t open it
+## FAQ
 
-Use --tunnel, and make sure both devices are not on VPN.
+### Q1: I can run the server but the phone can’t open it
 
-Q2: Do we need a Mac to develop iOS?
+* Use `--tunnel`, and make sure both devices are not on VPN.
 
-No. With Expo Go, you can run iOS on an iPhone without a Mac.
-(But building a standalone App Store build later requires macOS / EAS build.)
+```bash
+npx expo start --tunnel
+```
 
-Q3: Web build errors with expo-sqlite
+### Q2: Do we need a Mac to develop iOS?
 
-This project is primarily mobile (iOS/Android).
-If you run web mode, SQLite web worker/wasm may cause bundling issues.
-Recommended: focus on Expo Go mobile runtime.
+* No. With Expo Go, you can run iOS on an iPhone without a Mac.
+* (But building a standalone App Store build later typically needs EAS build / macOS.)
 
-License
+### Q3: Web build errors with expo-sqlite
+
+* This project is primarily mobile (iOS/Android).
+* Web mode may fail due to SQLite web worker/wasm bundling.
+* Recommended: focus on Expo Go mobile runtime.
+
+---
+
+## License
 
 MIT
+
+---
