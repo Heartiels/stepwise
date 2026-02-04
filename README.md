@@ -30,20 +30,18 @@ This repo is built for a course project and focuses on:
 - Windows tip: if node/npm/npx not found, it usually means Node was not added to PATH. Reinstall Node and enable “Add to PATH”.
 
 ### 2) Install Git
-
-Verify:
-
-git --version
+- Verify:
+  ```bash
+  git --version
 
 ### 3) Install Expo Go on your phone
-
-iOS: install Expo Go from the App Store
-
-Android: install Expo Go from Google Play
-
+- iOS: install Expo Go from the App Store
+- Android: install Expo Go from Google Play
 You will run the app on your phone by scanning a QR code.
 
-Getting Started (Run the App)
+---
+
+## Getting Started (Run the App)
 Step 1 — Clone the repo
 git clone https://github.com/Heartiels/stepwise.git
 cd stepwise
