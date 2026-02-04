@@ -1,4 +1,6 @@
-﻿import { db } from "./client";
+﻿import { v4 as uuidv4 } from 'uuid';
+import { db } from "./client";
+import { ensureDb } from "./ensure";
 
 export type Task = {
   id: string;
@@ -9,6 +11,7 @@ export type Task = {
 };
 
 export function listTasks(): Task[] {
+  ensureDb();
   return db.getAllSync<Task>(
     `SELECT id, title, notes, status, created_at
      FROM tasks
@@ -21,7 +24,7 @@ export function addTask(title: string) {
   const t = title.trim();
   if (!t) return null;
 
-  const id = crypto.randomUUID();
+  const id = uuidv4();
   const now = Date.now();
 
   db.runSync(

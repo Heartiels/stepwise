@@ -3,8 +3,9 @@
 Stepwise is an offline-first mobile app (React Native + Expo) that helps users break big goals into small actionable steps and execute them step-by-step.
 
 This repo is built for a course project and focuses on:
-- Simple task list
-- Offline local storage (SQLite)
+- Simple task list (create + list tasks)
+- Offline local storage (SQLite via `expo-sqlite`)
+- Tasks persist on-device (still there after reload / app restart)
 - Clean, minimal UX
 - Easy setup for teammates on Windows/macOS
 
@@ -158,9 +159,17 @@ git config core.eol lf
 
 ## Local Database (SQLite)
 
-* We use `expo-sqlite` to store tasks locally on the device.
-* Data is saved on your phone/simulator, **not in the repo**.
-* If you reinstall Expo Go or clear app storage, the DB resets.
+We use `expo-sqlite` for offline-first storage.
+
+- The database file is created on the device: `stepwise.db`
+- Tables are created on first launch (via our DB init)
+- Tasks you add in the Home tab are persisted locally (survive reload / restart)
+- If you delete the app / clear Expo Go storage, the local DB will reset
+- This repo does **not** sync data to the cloud (offline-only for now)
+
+> Note: Web mode is not a primary target. `expo-sqlite` may cause web bundling issues (wasm/worker).
+> Recommended: run on iOS/Android with Expo Go.
+
 
 ---
 

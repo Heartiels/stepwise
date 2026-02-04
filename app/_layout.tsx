@@ -1,3 +1,4 @@
+import 'react-native-get-random-values';
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { initDb } from "../src/db/schema";
