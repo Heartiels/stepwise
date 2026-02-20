@@ -1,6 +1,9 @@
 {
   "expo": {
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "name": "stepwise",
     "slug": "stepwise",
     "version": "1.0.0",
@@ -8,9 +11,10 @@
     "icon": "./assets/images/icon.png",
     "scheme": "stepwise",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.stepwise"
     },
     "android": {
       "adaptiveIcon": {
