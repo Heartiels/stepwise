@@ -55,13 +55,12 @@ This repo is built for a course project and focuses on:
 
 ### 4) (Optional) Create a `.env` file for AI goal decomposition
 
-The app supports AI-powered goal decomposition using OpenAI.  
-This is **optional** — if no API key is provided, the app will use **mock data** instead (so teammates can still run the project).
+* The app supports AI-powered goal decomposition using OpenAI.  
+* This is **optional** — if no API key is provided, the app will use **mock data** instead (so teammates can still run the project).
 
-Create a file named `.env` in the **repo root** (same folder as `package.json`):
-
-```bash
-EXPO_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+* Create a file named `.env` in the **repo root** (same folder as `package.json`):
+    ```bash
+    EXPO_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
 
 > Notes:
 > The variable name must start with EXPO_PUBLIC_ so Expo can read it in the app.
