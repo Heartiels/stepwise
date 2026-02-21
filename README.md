@@ -52,7 +52,7 @@ Built with React Native + Expo as a course project, with a focus on:
 * Android: install **Expo Go** from Google Play
 * You will run the app on your phone by scanning a QR code.
 
-### 4) (Optional) Create a `.env` file for AI goal decomposition
+### 4) Create a `.env` file for AI goal decomposition
 
 * The app supports AI-powered goal decomposition using OpenAI.  
 * This is **optional** — if no API key is provided, the app will use **mock data** instead.
@@ -63,7 +63,6 @@ Built with React Native + Expo as a course project, with a focus on:
 
 > Notes:
 > * The variable name must start with EXPO_PUBLIC_ so Expo can read it in the app.
-> * .env is ignored by Git (not pushed), so each teammate must create it manually.
 > * If .env is missing, the app will still run, but AI decomposition will return mock steps.
 
 ---
@@ -107,67 +106,6 @@ npx expo start
 
 ---
 
-## Network / QR Code Troubleshooting (Very Common)
-
-### ✅ Best practice checklist
-
-* Phone and laptop on the **same network** (same Wi-Fi)
-* Turn off **VPN / proxy** on both phone and laptop
-* Allow Node/Expo through firewall (especially on Windows)
-
-### If campus Wi-Fi blocks LAN discovery: use tunnel mode
-
-```bash
-npx expo start --tunnel
-```
-
-### “Not found / No usable data / Cannot connect”
-
-Try these in order:
-
-1. Restart Expo with clean cache:
-
-```bash
-npx expo start --clear
-```
-
-2. Use tunnel:
-
-```bash
-npx expo start --tunnel
-```
-
-3. Check firewall (Windows):
-
-* If you see a popup asking for permission, click **Allow**
-* If no popup appears, manually allow **Node.js** network access in Windows Defender Firewall
-
-4. Switch network:
-
-* If you’re on a restricted/campus network, try **phone hotspot**
-
----
-
-### “Missing credentials / OPENAI_API_KEY” error
-
-If you see an error like:
-
-> Missing credentials. Please pass an `apiKey`, or set the `OPENAI_API_KEY` environment variable.
-
-It usually means the app is trying to use OpenAI but no API key is configured.
-
-Fix:
-1. Create a `.env` file in the repo root
-
-2. Add:
-   ```bash
-   EXPO_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
-
-3. Restart Expo:
-    ```bash
-    npx expo start --clear
-
-* If you do not want to use OpenAI yet, that is okay — the app now supports a mock fallback and should still run without a key.
 
 ---
 
