@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { router } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
 import {
   Alert,
   Keyboard,
@@ -72,8 +72,14 @@ export default function HomeScreen() {
   // Show modal every time the app opens, and load existing tasks
   useEffect(() => {
     setModalVisible(true);
-    setTick((x) => x + 1);
   }, []);
+
+  // Re-fetch tasks whenever this screen comes into focus (e.g. returning from detail page)
+  useFocusEffect(
+    useCallback(() => {
+      setTick((x) => x + 1);
+    }, [])
+  );
 
   async function handleDecompose() {
     const trimmed = goal.trim();
