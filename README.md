@@ -63,9 +63,9 @@ This repo is built for a course project and focuses on:
     EXPO_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
 
 > Notes:
-> The variable name must start with EXPO_PUBLIC_ so Expo can read it in the app.
-> .env is ignored by Git (not pushed), so each teammate must create it manually.
-> If .env is missing, the app will still run, but AI decomposition will return mock steps.
+> * The variable name must start with EXPO_PUBLIC_ so Expo can read it in the app.
+> * .env is ignored by Git (not pushed), so each teammate must create it manually.
+> * If .env is missing, the app will still run, but AI decomposition will return mock steps.
 
 ---
 
