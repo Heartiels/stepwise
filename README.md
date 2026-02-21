@@ -28,6 +28,7 @@ Built with React Native + Expo as a course project, with a focus on:
   ```bash
   node -v
   npm -v
+  ```
 > Windows tip: if node/npm/npx not found, it usually means Node was not added to PATH. Reinstall Node and enable “Add to PATH”.
 
 ### 2) Install Git
@@ -103,8 +104,6 @@ npx expo start
   * Android: scan inside Expo Go
 
 > If everything is correct, the app should open within a few seconds.
-
-
 
 ---
 
