@@ -1,13 +1,11 @@
-# Stepwise (Offline-first Task Splitter)
+# Stepwise 
 
-Stepwise is an offline-first mobile app (React Native + Expo) that helps users break big goals into small actionable steps and execute them step-by-step.
+Stepwise is an AI-powered mobile app that helps users overcome procrastination by breaking big, overwhelming goals into small, actionable steps — generated in seconds using an LLM.
 
-This repo is built for a course project and focuses on:
-- Simple task list (create + list tasks)
-- Offline local storage (SQLite via `expo-sqlite`)
-- Tasks persist on-device (still there after reload / app restart)
-- Clean, minimal UX
-- Easy setup for teammates on Windows/macOS
+Built with React Native + Expo as a course project, with a focus on:
+- **LLM-powered goal decomposition** via OpenAI GPT
+- **Offline-first persistence** — all tasks stored locally with SQLite (`expo-sqlite`)
+- **Clean, minimal design** — focused on reducing friction, not adding it
 
 ---
 
@@ -17,7 +15,8 @@ This repo is built for a course project and focuses on:
 - TypeScript
 - Expo Router (file-based routing)
 - expo-sqlite (local offline database)
-- OpenAI API (optional, for AI goal decomposition)
+- NativeWind v4 (Tailwind CSS for React Native)
+- OpenAI API
 
 ---
 
@@ -56,7 +55,7 @@ This repo is built for a course project and focuses on:
 ### 4) (Optional) Create a `.env` file for AI goal decomposition
 
 * The app supports AI-powered goal decomposition using OpenAI.  
-* This is **optional** — if no API key is provided, the app will use **mock data** instead (so teammates can still run the project).
+* This is **optional** — if no API key is provided, the app will use **mock data** instead.
 
 * Create a file named `.env` in the **repo root** (same folder as `package.json`):
     ```bash
@@ -172,28 +171,7 @@ Fix:
 
 ---
 
-## Platform Notes (Windows vs macOS)
 
-### ✅ Windows + macOS teammates (Git) — any conflict?
-
-No major conflict if we follow these rules:
-
-* Always run `npm install` locally (**do not commit `node_modules/`**)
-* Avoid OS-specific absolute paths in code
-* Use consistent line endings (**LF**) to reduce diff noise
-
-### Recommended Git settings (Windows)
-
-Run inside the repo:
-
-```bash
-git config core.autocrlf false
-git config core.eol lf
-```
-
-> Tip: a `.gitattributes` file can enforce LF for the whole repo.
-
----
 
 ## Local Database (SQLite)
 
@@ -211,93 +189,23 @@ We use `expo-sqlite` for offline-first storage.
 
 ---
 
-## Common Commands
-
-* Start (normal):
-
-  ```bash
-  npx expo start
-  ```
-
-* Start with clean cache:
-
-  ```bash
-  npx expo start --clear
-  ```
-
-* Start with tunnel (for strict networks):
-
-  ```bash
-  npx expo start --tunnel
-  ```
-
----
 
 ## Project Structure (High-level)
 
-* `app/` — screens & routes (expo-router)
-* `src/` — app logic (db, helpers, etc.)
-* `src/db/` — SQLite client, schema, repos
-* `assets/` — icons & images
 
----
+* `app/` — screens & routes (Expo Router, file-based)
+  * `(tabs)/` — tab navigator (home / My Goals screen)
+  * `task/[id].tsx` — goal detail screen (dynamic route)
+  * `_layout.tsx` — root layout (GestureHandlerRootView, DB init)
+* `src/` — app logic
+  * `db/` — SQLite client, schema, and task repository
+  * `services/` — external API integrations (OpenAI)
+* `components/` — reusable UI components
+  * `ui/` — primitives: Card, Input, Button, etc.
+* `hooks/` — custom React hooks
+* `constants/` — theme tokens
+* `assets/images/` — app icons & splash screen
 
-## Contributing / Workflow
 
-### Suggested branch workflow
-
-1. Create a feature branch:
-
-```bash
-git checkout -b feat/your-feature
-```
-
-2. Commit and push:
-
-```bash
-git add .
-git commit -m "feat: your feature"
-git push -u origin feat/your-feature
-```
-
-3. Open a Pull Request on GitHub
-
----
-
-## FAQ
-
-### Q1: I can run the server but the phone can’t open it
-
-* Use `--tunnel`, and make sure both devices are not on VPN.
-
-```bash
-npx expo start --tunnel
-```
-
-### Q2: Do we need a Mac to develop iOS?
-
-* No. With Expo Go, you can run iOS on an iPhone without a Mac.
-* (But building a standalone App Store build later typically needs EAS build / macOS.)
-
-### Q3: Web build errors with expo-sqlite
-
-* This project is primarily mobile (iOS/Android).
-* Web mode may fail due to SQLite web worker/wasm bundling.
-* Recommended: focus on Expo Go mobile runtime.
-
-### Q4: Do I need an OpenAI API key to run the app?
-
-* No. The app can run without a key.
-
-- With `.env` + `EXPO_PUBLIC_OPENAI_API_KEY`: real AI decomposition (OpenAI)
-- Without `.env`: mock decomposition data (for local development / teammates)
-
-* This is intentional so the project can be cloned and run easily without sharing secrets.
-
----
-
-## License
-
-MIT
 
 ---
