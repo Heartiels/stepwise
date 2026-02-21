@@ -104,25 +104,6 @@ npx expo start
 
 > If everything is correct, the app should open within a few seconds.
 
----
-
-
----
-
-
-
-## Local Database (SQLite)
-
-We use `expo-sqlite` for offline-first storage.
-
-- The database file is created on the device: `stepwise.db`
-- Tables are created on first launch (via our DB init)
-- Tasks you add in the Home tab are persisted locally (survive reload / restart)
-- If you delete the app / clear Expo Go storage, the local DB will reset
-- This repo does **not** sync data to the cloud (offline-only for now)
-
-> Note: Web mode is not a primary target. `expo-sqlite` may cause web bundling issues (wasm/worker).
-> Recommended: run on iOS/Android with Expo Go.
 
 
 ---
