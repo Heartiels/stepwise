@@ -291,15 +291,7 @@ function TaskCard({ task, onPress, onDelete }: { task: TaskWithSteps; onPress: (
         ))}
       </View>
 
-      {/* Action Tips */}
-      {task.actionTips.length > 0 && (
-        <View style={styles.tipsCard}>
-          <Text style={styles.tipsLabel}>💡 Action Tips</Text>
-          {task.actionTips.map((tip, i) => (
-            <Text key={i} style={styles.tipText}>• {tip}</Text>
-          ))}
-        </View>
-      )}
+
     </View>
   );
 }
