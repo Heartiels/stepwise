@@ -26,5 +26,10 @@ export function initDb() {
 
     CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id);
     CREATE INDEX IF NOT EXISTS idx_subtasks_is_today ON subtasks(is_today);
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL DEFAULT ''
+    );
   `);
 }

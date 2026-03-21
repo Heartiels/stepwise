@@ -77,6 +77,57 @@ export function updateSubtaskStatus(subtaskId: string, status: "todo" | "done") 
   );
 }
 
+export function getUserSetting(key: string, fallback = ""): string {
+  ensureDb();
+  const row = db.getFirstSync<{ value: string }>(
+    `SELECT value FROM settings WHERE key = ?`, [key]
+  );
+  return row?.value ?? fallback;
+}
+
+export function setUserSetting(key: string, value: string) {
+  db.runSync(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [key, value]
+  );
+}
+
+export function getUserNickname(): string {
+  return getUserSetting("nickname", "My Name");
+}
+
+export function setUserNickname(name: string) {
+  setUserSetting("nickname", name);
+}
+
+export function getCompletionsByDay(): Record<string, number> {
+  ensureDb();
+  const rows = db.getAllSync<{ day: string; count: number }>(
+    `SELECT date(completed_at / 1000, 'unixepoch', 'localtime') as day, COUNT(*) as count
+     FROM subtasks WHERE status = 'done' AND completed_at IS NOT NULL
+     GROUP BY day`
+  );
+  const map: Record<string, number> = {};
+  rows.forEach((r) => { map[r.day] = r.count; });
+  return map;
+}
+
+export function replaceSubtasks(
+  taskId: string,
+  steps: { title: string; ord: number; status?: string; completed_at?: number | null }[]
+) {
+  db.runSync(`DELETE FROM subtasks WHERE task_id = ?`, [taskId]);
+  for (const step of steps) {
+    const id = uuidv4();
+    db.runSync(
+      `INSERT INTO subtasks (id, task_id, title, status, ord, estimate_min, is_today, completed_at)
+       VALUES (?, ?, ?, ?, ?, 10, 0, ?)`,
+      [id, taskId, step.title, step.status ?? "todo", step.ord, step.completed_at ?? null]
+    );
+  }
+}
+
 export function listSubtasksForTask(taskId: string): Subtask[] {
   ensureDb();
   return db.getAllSync<Subtask>(

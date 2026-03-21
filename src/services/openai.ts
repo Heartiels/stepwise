@@ -169,3 +169,94 @@ export async function decomposeTask(goal: string): Promise<DecomposedTask> {
     return mockDecomposeTask(trimmed);
   }
 }
+
+// ─── Edit existing steps ───────────────────────────────────────────────────────
+
+export async function editSteps(
+  goalTitle: string,
+  currentSteps: DecomposedStep[],
+  selectedIndices: number[], // 0-based; empty = apply to all
+  userRequest: string
+): Promise<DecomposedStep[]> {
+  const openai = getClient();
+  if (!openai) throw new Error("OpenAI API key not configured.");
+
+  const isPartial = selectedIndices.length > 0;
+
+  // Only send selected steps to LLM — non-selected steps never touch LLM
+  const stepsToEdit = isPartial
+    ? selectedIndices.map((i) => currentSteps[i])
+    : currentSteps;
+
+  const stepsText = stepsToEdit
+    .map((s, i) => `Step ${i + 1}: ${s.emoji} ${s.action} — ${s.explanation}`)
+    .join("\n");
+
+  const systemPrompt = `You are a productivity coach helping a user refine steps of an action plan.
+You may return more or fewer steps than provided (e.g. break one step into multiple).
+Keep each explanation to 1-2 sentences max. Return ONLY valid JSON.`;
+
+  const userMessage = isPartial
+    ? `Goal: "${goalTitle}"\n\nStep(s) to modify:\n${stepsText}\n\nUser's request: ${userRequest}\n\nReturn the replacement step(s).`
+    : `Goal: "${goalTitle}"\n\nCurrent steps:\n${stepsText}\n\nUser's request: ${userRequest}\n\nReturn the complete updated step list.`;
+
+  const response = await openai.responses.create({
+    model: "gpt-4o-mini",
+    input: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage },
+    ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "step_edit",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            steps: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  emoji: { type: "string" },
+                  action: { type: "string" },
+                  explanation: { type: "string" },
+                },
+                required: ["emoji", "action", "explanation"],
+              },
+            },
+          },
+          required: ["steps"],
+        },
+      },
+    },
+  });
+
+  const llmSteps = (JSON.parse(response.output_text) as { steps: DecomposedStep[] }).steps;
+
+  if (!isPartial) return llmSteps;
+
+  // Splice LLM replacements into the original array at the position of selected steps.
+  // Non-selected steps are taken directly from currentSteps — LLM never touched them.
+  const selectedSet = new Set(selectedIndices);
+  const result: DecomposedStep[] = [];
+  let inserted = false;
+
+  for (let i = 0; i < currentSteps.length; i++) {
+    if (selectedSet.has(i)) {
+      if (!inserted) {
+        // Insert all LLM-returned replacements at the first selected position
+        result.push(...llmSteps);
+        inserted = true;
+      }
+      // Skip remaining selected steps (replaced by llmSteps above)
+    } else {
+      result.push(currentSteps[i]);
+    }
+  }
+
+  return result;
+}

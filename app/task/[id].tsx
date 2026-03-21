@@ -1,12 +1,16 @@
 import { useLocalSearchParams, router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Easing,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import Swipeable from "react-native-gesture-handler/Swipeable";
@@ -14,32 +18,25 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   listSubtasksForTask,
   listTasks,
+  replaceSubtasks,
   updateSubtaskStatus,
   type Subtask,
 } from "../../src/db/taskRepo";
+import { editSteps } from "../../src/services/openai";
 
-// How long to wait for the screen slide-in to finish before revealing steps
 const TRANSITION_DELAY = 380;
-// Gap between each step appearing
 const STEP_INTERVAL = 130;
 
 export default function TaskDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const task = useMemo(
-    () => listTasks().find((t) => t.id === id) ?? null,
-    [id]
-  );
-  const subtasks = useMemo(() => listSubtasksForTask(id as string), [id]);
+  const task = useMemo(() => listTasks().find((t) => t.id === id) ?? null, [id]);
+  const [subtasks, setSubtasks] = useState<Subtask[]>(() => listSubtasksForTask(id as string));
+  const [revision, setRevision] = useState(0); // bumping triggers animation replay
 
   let actionTips: string[] = [];
-  try {
-    actionTips = task?.notes ? JSON.parse(task.notes) : [];
-  } catch {
-    actionTips = [];
-  }
+  try { actionTips = task?.notes ? JSON.parse(task.notes) : []; } catch { actionTips = []; }
 
-  // Track which steps are done to know when all are complete
   const [doneIds, setDoneIds] = useState<Set<string>>(
     () => new Set(subtasks.filter((s) => s.status === "done").map((s) => s.id))
   );
@@ -53,52 +50,127 @@ export default function TaskDetail() {
     });
   }
 
-  // Stamp animation
+  // ── More menu ──────────────────────────────────────────────────────────────
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  // ── Edit mode ──────────────────────────────────────────────────────────────
+  const [editMode, setEditMode] = useState(false);
+  const [selectedStepIds, setSelectedStepIds] = useState<Set<string>>(new Set());
+  const [editInput, setEditInput] = useState("");
+  const [inputFocused, setInputFocused] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+
+  function enterEditMode() {
+    setMenuVisible(false);
+    setEditMode(true);
+    setSelectedStepIds(new Set());
+    setEditInput("");
+    setInputFocused(false);
+  }
+
+  function exitEditMode() {
+    setEditMode(false);
+    setSelectedStepIds(new Set());
+    setEditInput("");
+    setInputFocused(false);
+  }
+
+  async function handleStartEditing() {
+    if (!editInput.trim()) {
+      Alert.alert("Please describe what changes you want.");
+      return;
+    }
+    if (!task) return;
+
+    // Map selected IDs to 0-based indices
+    const selectedIndices = subtasks
+      .map((s, i) => (selectedStepIds.has(s.id) ? i : -1))
+      .filter((i) => i !== -1);
+
+    // Parse current subtasks into DecomposedStep format
+    const currentSteps = subtasks.map((s) => {
+      const [emoji, action, explanation] = s.title.split("\n");
+      return { emoji: emoji ?? "", action: action ?? "", explanation: explanation ?? "" };
+    });
+
+    setEditLoading(true);
+    try {
+      const newSteps = await editSteps(task.title, currentSteps, selectedIndices, editInput.trim());
+
+      // Compute per-step status: non-selected steps preserve their original status,
+      // LLM-generated replacements start as 'todo'.
+      const selectedSet = new Set(selectedIndices);
+      const llmCount = newSteps.length - (subtasks.length - selectedIndices.length);
+      const stepMeta: { status: string; completed_at: number | null }[] = [];
+      let llmInserted = false;
+      for (let i = 0; i < subtasks.length; i++) {
+        if (selectedSet.has(i)) {
+          if (!llmInserted) {
+            for (let j = 0; j < llmCount; j++) {
+              stepMeta.push({ status: "todo", completed_at: null });
+            }
+            llmInserted = true;
+          }
+        } else {
+          stepMeta.push({ status: subtasks[i].status, completed_at: subtasks[i].completed_at ?? null });
+        }
+      }
+
+      replaceSubtasks(
+        task.id,
+        newSteps.map((s, i) => ({
+          title: `${s.emoji}\n${s.action}\n${s.explanation}`,
+          ord: i,
+          status: stepMeta[i]?.status ?? "todo",
+          completed_at: stepMeta[i]?.completed_at ?? null,
+        }))
+      );
+
+      const updated = listSubtasksForTask(task.id);
+      setSubtasks(updated);
+      setDoneIds(new Set(updated.filter((s) => s.status === "done").map((s) => s.id)));
+      setRevision((r) => r + 1);
+      exitEditMode();
+    } catch (err: any) {
+      Alert.alert("Something went wrong", err?.message ?? "Please try again.");
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
+  function toggleStepSelect(stepId: string) {
+    setSelectedStepIds((prev) => {
+      const next = new Set(prev);
+      next.has(stepId) ? next.delete(stepId) : next.add(stepId);
+      return next;
+    });
+  }
+
+  // ── Stamp animation ────────────────────────────────────────────────────────
   const stampScale = useRef(new Animated.Value(3)).current;
   const stampOpacity = useRef(new Animated.Value(0)).current;
   const stampRotate = useRef(new Animated.Value(-20)).current;
 
   useEffect(() => {
     if (allDone) {
-      stampScale.setValue(3);
-      stampOpacity.setValue(0);
-      stampRotate.setValue(-20);
+      stampScale.setValue(3); stampOpacity.setValue(0); stampRotate.setValue(-20);
       Animated.parallel([
-        Animated.spring(stampScale, {
-          toValue: 1,
-          friction: 4,
-          tension: 120,
-          useNativeDriver: true,
-        }),
-        Animated.timing(stampOpacity, {
-          toValue: 1,
-          duration: 120,
-          useNativeDriver: true,
-        }),
-        Animated.spring(stampRotate, {
-          toValue: -12,
-          friction: 5,
-          tension: 100,
-          useNativeDriver: true,
-        }),
+        Animated.spring(stampScale, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }),
+        Animated.timing(stampOpacity, { toValue: 1, duration: 120, useNativeDriver: true }),
+        Animated.spring(stampRotate, { toValue: -12, friction: 5, tension: 100, useNativeDriver: true }),
       ]).start();
     } else {
-      Animated.timing(stampOpacity, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }).start();
+      Animated.timing(stampOpacity, { toValue: 0, duration: 150, useNativeDriver: true }).start();
     }
   }, [allDone]);
 
-  // visibleCount controls how many steps are rendered.
+  // ── Step reveal ────────────────────────────────────────────────────────────
   const [visibleCount, setVisibleCount] = useState(0);
 
   useEffect(() => {
     setVisibleCount(0);
     let count = 0;
     let interval: ReturnType<typeof setInterval>;
-
     const startTimer = setTimeout(() => {
       interval = setInterval(() => {
         count += 1;
@@ -106,12 +178,8 @@ export default function TaskDetail() {
         if (count >= subtasks.length + 1) clearInterval(interval);
       }, STEP_INTERVAL);
     }, TRANSITION_DELAY);
-
-    return () => {
-      clearTimeout(startTimer);
-      clearInterval(interval);
-    };
-  }, [id]);
+    return () => { clearTimeout(startTimer); clearInterval(interval); };
+  }, [id, revision]);
 
   const stampRotateDeg = stampRotate.interpolate({
     inputRange: [-20, -12],
@@ -120,13 +188,35 @@ export default function TaskDetail() {
 
   return (
     <View style={styles.screen}>
+      {/* ── Back button ───────────────────────────────────────────────── */}
       <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
         <Ionicons name="chevron-back" size={22} color="#18181b" />
         <Text style={styles.backText}>Goals</Text>
       </Pressable>
 
+      {/* ── More button ───────────────────────────────────────────────── */}
+      <Pressable onPress={() => setMenuVisible((v) => !v)} style={styles.moreBtn} hitSlop={8}>
+        <View style={styles.moreCircle}>
+          <Ionicons name="ellipsis-horizontal" size={16} color="#18181b" />
+        </View>
+      </Pressable>
+
+      {/* ── Dropdown menu ─────────────────────────────────────────────── */}
+      {menuVisible && (
+        <>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setMenuVisible(false)} />
+          <View style={styles.dropdownMenu}>
+            <Pressable style={styles.dropdownItem} onPress={enterEditMode}>
+              <Ionicons name="create-outline" size={16} color="#18181b" />
+              <Text style={styles.dropdownItemText}>Edit Steps</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
+
+      {/* ── Scroll content ────────────────────────────────────────────── */}
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, editMode && { paddingBottom: 260 }]}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.goalTitle}>{task?.title}</Text>
@@ -138,6 +228,9 @@ export default function TaskDetail() {
               subtask={sub}
               index={idx}
               onToggle={handleToggle}
+              editMode={editMode}
+              selected={selectedStepIds.has(sub.id)}
+              onSelect={() => toggleStepSelect(sub.id)}
             />
           ))}
         </View>
@@ -147,45 +240,84 @@ export default function TaskDetail() {
         )}
       </ScrollView>
 
-      {/* All-done stamp */}
+      {/* ── All-done stamp ────────────────────────────────────────────── */}
       <Animated.View
         pointerEvents="none"
-        style={[
-          styles.stamp,
-          {
-            opacity: stampOpacity,
-            transform: [{ scale: stampScale }, { rotate: stampRotateDeg }],
-          },
-        ]}
+        style={[styles.stamp, { opacity: stampOpacity, transform: [{ scale: stampScale }, { rotate: stampRotateDeg }] }]}
       >
         <Text style={styles.stampText}>ALL DONE!</Text>
       </Animated.View>
+
+      {/* ── Edit mode bottom sheet ────────────────────────────────────── */}
+      {editMode && (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.editSheet}
+        >
+          {/* Header row */}
+          <View style={styles.editSheetHeader}>
+            <Pressable onPress={exitEditMode} hitSlop={8}>
+              <Text style={styles.editCancelText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.editStartBtn, editLoading && { opacity: 0.6 }]}
+              onPress={handleStartEditing}
+              disabled={editLoading}
+              hitSlop={8}
+            >
+              <Text style={styles.editStartText}>
+                {editLoading ? "Editing…" : "Start Editing"}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Instruction */}
+          <Text style={styles.editInstruction}>
+            Select steps to narrow the scope
+          </Text>
+
+          {/* Input */}
+          <TextInput
+            style={[styles.editInput, inputFocused && styles.editInputExpanded]}
+            value={editInput}
+            onChangeText={setEditInput}
+            placeholder={
+              inputFocused
+                ? "e.g. Break each step into 3 smaller sub-steps\ne.g. I want to finish dinner before this step\ne.g. Reschedule the time"
+                : "What changes do you want to make..."
+            }
+            placeholderTextColor="#a1a1aa"
+            multiline
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
+          />
+        </KeyboardAvoidingView>
+      )}
     </View>
   );
 }
 
-// Each card owns its fade-in + swipe-to-complete gesture
-function StepCard({ subtask, index, onToggle }: { subtask: Subtask; index: number; onToggle: (id: string, isDone: boolean) => void }) {
+// ─── Step Card ────────────────────────────────────────────────────────────────
+
+function StepCard({
+  subtask, index, onToggle, editMode, selected, onSelect,
+}: {
+  subtask: Subtask;
+  index: number;
+  onToggle: (id: string, isDone: boolean) => void;
+  editMode: boolean;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const opacity = useRef(new Animated.Value(0)).current;
   const y = useRef(new Animated.Value(12)).current;
   const swipeRef = useRef<Swipeable>(null);
   const [done, setDone] = useState(subtask.status === "done");
 
-  // Entrance animation on mount
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(y, {
-        toValue: 0,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
+      Animated.timing(opacity, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(y, { toValue: 0, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
   }, []);
 
@@ -206,6 +338,39 @@ function StepCard({ subtask, index, onToggle }: { subtask: Subtask; index: numbe
 
   const [emoji, action, explanation] = subtask.title.split("\n");
 
+  const cardContent = (
+    <View style={styles.stepRow}>
+      <View style={[styles.stepBadge, done && !editMode && styles.stepBadgeDone]}>
+        {done && !editMode
+          ? <Ionicons name="close" size={14} color="#fff" />
+          : <Text style={styles.stepBadgeText}>{index + 1}</Text>
+        }
+      </View>
+      <View style={styles.stepContent}>
+        <Text style={[styles.stepAction, done && !editMode && styles.stepTextDone]}>
+          <Text style={[styles.stepEmoji, done && !editMode && styles.stepTextDone]}>{emoji ?? "•"} </Text>
+          {action ?? subtask.title}
+        </Text>
+        {!!explanation && (
+          <Text style={[styles.stepExplanation, done && !editMode && styles.stepTextDone]}>{explanation}</Text>
+        )}
+      </View>
+    </View>
+  );
+
+  if (editMode) {
+    return (
+      <Animated.View style={{ opacity, transform: [{ translateY: y }] }}>
+        <Pressable
+          onPress={onSelect}
+          style={[styles.stepCard, selected && styles.stepCardSelected]}
+        >
+          {cardContent}
+        </Pressable>
+      </Animated.View>
+    );
+  }
+
   return (
     <Animated.View style={{ opacity, transform: [{ translateY: y }] }}>
       <Swipeable
@@ -216,27 +381,13 @@ function StepCard({ subtask, index, onToggle }: { subtask: Subtask; index: numbe
         overshootRight={false}
         containerStyle={styles.stepCard}
       >
-        <View style={styles.stepRow}>
-          <View style={[styles.stepBadge, done && styles.stepBadgeDone]}>
-            {done
-              ? <Ionicons name="close" size={14} color="#fff" />
-              : <Text style={styles.stepBadgeText}>{index + 1}</Text>
-            }
-          </View>
-          <View style={styles.stepContent}>
-            <Text style={[styles.stepAction, done && styles.stepTextDone]}>
-              <Text style={[styles.stepEmoji, done && styles.stepTextDone]}>{emoji ?? "•"} </Text>
-              {action ?? subtask.title}
-            </Text>
-            {!!explanation && (
-              <Text style={[styles.stepExplanation, done && styles.stepTextDone]}>{explanation}</Text>
-            )}
-          </View>
-        </View>
+        {cardContent}
       </Swipeable>
     </Animated.View>
   );
 }
+
+// ─── Tips Card ────────────────────────────────────────────────────────────────
 
 function TipsCard({ tips }: { tips: string[] }) {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -244,148 +395,140 @@ function TipsCard({ tips }: { tips: string[] }) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(y, {
-        toValue: 0,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
+      Animated.timing(opacity, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(y, { toValue: 0, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
   }, []);
 
   return (
-    <Animated.View
-      style={[styles.tipsCard, { opacity, transform: [{ translateY: y }] }]}
-    >
+    <Animated.View style={[styles.tipsCard, { opacity, transform: [{ translateY: y }] }]}>
       <Text style={styles.tipsLabel}>💡 Action Tips</Text>
-      {tips.map((tip, i) => (
-        <Text key={i} style={styles.tipText}>
-          • {tip}
-        </Text>
+      {tips.slice(0, 3).map((tip, i) => (
+        <Text key={i} style={styles.tipText}>• {tip}</Text>
       ))}
     </Animated.View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f9f9fb" },
 
   backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    position: "absolute",
-    top: 52,
-    left: 16,
-    zIndex: 10,
-    gap: 2,
+    flexDirection: "row", alignItems: "center",
+    position: "absolute", top: 52, left: 16, zIndex: 10, gap: 2,
   },
   backText: { fontSize: 16, color: "#18181b", fontWeight: "500" },
 
-  scroll: {
-    paddingHorizontal: 20,
-    paddingTop: 100,
-    paddingBottom: 60,
+  moreBtn: { position: "absolute", top: 52, right: 16, zIndex: 10 },
+  moreCircle: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: "#f4f4f5",
+    alignItems: "center", justifyContent: "center",
   },
 
+  dropdownMenu: {
+    position: "absolute", top: 90, right: 16, zIndex: 20,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1, borderColor: "#e4e4e7",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1, shadowRadius: 12,
+    elevation: 8,
+    minWidth: 160,
+    overflow: "hidden",
+  },
+  dropdownItem: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingVertical: 13, paddingHorizontal: 16,
+  },
+  dropdownItemText: { fontSize: 14, fontWeight: "500", color: "#18181b" },
+
+  scroll: { paddingHorizontal: 20, paddingTop: 100, paddingBottom: 60 },
+
   goalTitle: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#18181b",
-    lineHeight: 32,
-    marginBottom: 24,
-    letterSpacing: -0.3,
+    fontSize: 26, fontWeight: "800", color: "#18181b",
+    lineHeight: 32, marginBottom: 24, letterSpacing: -0.3,
   },
 
   stepsContainer: { gap: 10 },
 
   stepCard: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e4e4e7",
+    borderRadius: 16, borderWidth: 1, borderColor: "#e4e4e7",
     padding: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+  },
+  stepCardSelected: {
+    borderColor: "#f97316", borderWidth: 2,
+    shadowColor: "#f97316", shadowOpacity: 0.15,
   },
   stepRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   stepBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 26, height: 26, borderRadius: 13,
     backgroundColor: "#18181b",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 2,
-    flexShrink: 0,
+    alignItems: "center", justifyContent: "center", marginTop: 2, flexShrink: 0,
   },
   stepBadgeText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   stepBadgeDone: { backgroundColor: "#ef4444" },
   swipeAction: {
-    backgroundColor: "#ef4444",
-    justifyContent: "center",
-    alignItems: "center",
-    width: 80,
-    borderRadius: 16,
-    gap: 3,
+    backgroundColor: "#ef4444", justifyContent: "center", alignItems: "center",
+    width: 80, borderRadius: 16, gap: 3,
   },
   swipeActionUndo: { backgroundColor: "#a1a1aa" },
   swipeActionText: { color: "#fff", fontSize: 11, fontWeight: "600" },
-  stepTextDone: {
-    color: "#c4c4c4",
-    textDecorationLine: "line-through",
-  },
+  stepTextDone: { color: "#c4c4c4", textDecorationLine: "line-through" },
   stepContent: { flex: 1, gap: 2 },
   stepEmoji: { fontSize: 18, marginBottom: 2 },
-  stepAction: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#18181b",
-    lineHeight: 20,
-  },
-  stepExplanation: {
-    fontSize: 12,
-    color: "#71717a",
-    lineHeight: 18,
-    marginTop: 3,
-  },
+  stepAction: { fontSize: 14, fontWeight: "600", color: "#18181b", lineHeight: 20 },
+  stepExplanation: { fontSize: 12, color: "#71717a", lineHeight: 18, marginTop: 3 },
 
   tipsCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e4e4e7",
-    padding: 14,
-    marginTop: 16,
-    gap: 6,
+    backgroundColor: "#fff", borderRadius: 16, borderWidth: 1,
+    borderColor: "#e4e4e7", padding: 14, marginTop: 16, gap: 6,
   },
   tipsLabel: { fontSize: 13, fontWeight: "700", color: "#71717a", marginBottom: 4 },
   tipText: { fontSize: 13, color: "#52525b", lineHeight: 20 },
 
   stamp: {
-    position: "absolute",
-    top: "40%",
-    alignSelf: "center",
-    borderWidth: 4,
-    borderColor: "#dc2626",
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: "transparent",
+    position: "absolute", top: "40%", alignSelf: "center",
+    borderWidth: 4, borderColor: "#dc2626", borderRadius: 8,
+    paddingVertical: 12, paddingHorizontal: 24, backgroundColor: "transparent",
   },
   stampText: {
-    fontSize: 36,
-    fontWeight: "900",
-    color: "#dc2626",
-    letterSpacing: 4,
-    textTransform: "uppercase",
+    fontSize: 36, fontWeight: "900", color: "#dc2626",
+    letterSpacing: 4, textTransform: "uppercase",
   },
+
+  // Edit mode bottom sheet
+  editSheet: {
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    borderTopWidth: 1, borderColor: "#e4e4e7",
+    padding: 20, paddingBottom: 36,
+    gap: 12,
+    shadowColor: "#000", shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08, shadowRadius: 16, elevation: 10,
+  },
+  editSheetHeader: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+  },
+  editCancelText: { fontSize: 15, color: "#71717a", fontWeight: "500" },
+  editStartBtn: {
+    backgroundColor: "#18181b", borderRadius: 10,
+    paddingVertical: 8, paddingHorizontal: 16,
+  },
+  editStartText: { fontSize: 14, fontWeight: "600", color: "#fff" },
+  editInstruction: { fontSize: 13, color: "#71717a", fontWeight: "500" },
+  editInput: {
+    borderWidth: 1, borderColor: "#e4e4e7", borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: "#18181b", minHeight: 44,
+    textAlignVertical: "top",
+  },
+  editInputExpanded: { minHeight: 80 },
 });
