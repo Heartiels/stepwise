@@ -19,6 +19,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { decomposeTask, type DecomposedTask } from "../../src/services/openai";
 import { Input } from "../../components/ui/input";
+import { VoiceInputButton } from "@/components/voice-input-button";
 
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
@@ -95,15 +96,24 @@ export default function HomeScreen() {
             <Text style={styles.dialogSub}>
               Tell me your goal and I'll break it into small, doable steps.
             </Text>
-            <Input
-              value={goal}
-              onChangeText={setGoal}
-              placeholder="e.g. Start learning Spanish..."
-              multiline
-              numberOfLines={3}
-              style={styles.dialogInput}
-              editable={!loading}
-            />
+            <View style={styles.goalRow}>
+              <Input
+                value={goal}
+                onChangeText={setGoal}
+                placeholder="e.g. Start learning Spanish..."
+                multiline
+                numberOfLines={3}
+                style={[styles.dialogInput, { flex: 1 }]}
+                editable={!loading}
+              />
+
+              <VoiceInputButton
+                onText={(t) => {
+                  setGoal(t);
+                  Keyboard.dismiss();
+                }}
+              />
+            </View>
             <Pressable
               onPress={handleDecompose}
               disabled={loading}
@@ -195,7 +205,6 @@ const styles = StyleSheet.create({
     minHeight: 72,
     textAlignVertical: "top",
     paddingTop: 12,
-    marginBottom: 12,
   },
   submitBtn: {
     backgroundColor: "#18181b",
@@ -243,4 +252,12 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 48, marginBottom: 4 },
   emptyTitle: { fontSize: 20, fontWeight: "700", color: "#18181b" },
   emptySub: { fontSize: 14, color: "#a1a1aa" },
+
+  goalRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 12,
+  marginBottom: 12,
+  },
+
 });
