@@ -13,6 +13,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="today"
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="bookmark-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="explore"
         options={{
           tabBarIcon: ({ color, size }) => (

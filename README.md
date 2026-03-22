@@ -12,6 +12,7 @@ Built with React Native + Expo as a course project, with a focus on:
 - **Text or voice goal input** - users can type a goal or record it with the in-app microphone button
 - **AI-powered task decomposition** - goals are broken into small, actionable steps in seconds
 - **AI step refinement** - users can revise selected steps with follow-up AI editing
+- **Today focus view** - users can bookmark specific steps for today and view them in one focused tab
 - **Offline goal history** - all goals and subtasks are stored locally with SQLite
 - **Goal search** - users can search the My Goals / history page by title
 - **Progress tracking** - users can mark steps as done and review their activity over time
@@ -136,7 +137,14 @@ npx expo start
 
 - Open any goal from the history page
 - Swipe a step to mark it done or undo it
+- Tap the bookmark icon on a step to add or remove it from **Today**
 - Use **Edit Steps** to ask AI to revise selected steps
+
+### Focus on today
+
+- Open the **Today** tab
+- Review only the steps you marked for today
+- Remove a step from Today or mark it done directly from that screen
 
 ### Search goal history
 
@@ -148,7 +156,8 @@ npx expo start
 ## Project Structure (High-level)
 
 - `app/` - screens and routes (Expo Router, file-based)
-  - `(tabs)/` - tab navigator (home / profile)
+  - `(tabs)/` - tab navigator (home / today / profile)
+  - `(tabs)/today.tsx` - focused list of subtasks marked for today
   - `history.tsx` - goal history screen with search
   - `task/[id].tsx` - goal detail screen (dynamic route)
   - `_layout.tsx` - root layout (`GestureHandlerRootView`, DB init)
@@ -166,6 +175,8 @@ npx expo start
 
 - Added voice goal input with microphone recording and OpenAI transcription
 - Added English-focused transcription behavior for voice input
+- Added a Today tab for focused daily execution
+- Added bookmarking of subtasks into the Today view
 - Added search to the My Goals / history screen
 - Improved error handling for short recordings and failed transcription responses
 

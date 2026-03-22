@@ -21,6 +21,10 @@ export type Subtask = {
   is_today: number;
 };
 
+export type TodaySubtask = Subtask & {
+  task_title: string;
+};
+
 export function listTasks(): Task[] {
   ensureDb();
   return db.getAllSync<Task>(
@@ -72,8 +76,10 @@ export function addSubtasks(
 
 export function updateSubtaskStatus(subtaskId: string, status: "todo" | "done") {
   db.runSync(
-    `UPDATE subtasks SET status = ?, completed_at = ? WHERE id = ?`,
-    [status, status === "done" ? Date.now() : null, subtaskId]
+    `UPDATE subtasks
+     SET status = ?, completed_at = ?, is_today = CASE WHEN ? = 'done' THEN 0 ELSE is_today END
+     WHERE id = ?`,
+    [status, status === "done" ? Date.now() : null, status, subtaskId]
   );
 }
 
@@ -115,7 +121,13 @@ export function getCompletionsByDay(): Record<string, number> {
 
 export function replaceSubtasks(
   taskId: string,
-  steps: { title: string; ord: number; status?: string; completed_at?: number | null }[]
+  steps: {
+    title: string;
+    ord: number;
+    status?: string;
+    completed_at?: number | null;
+    is_today?: number;
+  }[]
 ) {
   db.runSync(`DELETE FROM subtasks WHERE task_id = ?`, [taskId]);
   for (const step of steps) {
@@ -123,8 +135,18 @@ export function replaceSubtasks(
     db.runSync(
       `INSERT INTO subtasks (id, task_id, title, status, ord, estimate_min, is_today, completed_at)
        VALUES (?, ?, ?, ?, ?, 10, 0, ?)`,
-      [id, taskId, step.title, step.status ?? "todo", step.ord, step.completed_at ?? null]
+      [
+        id,
+        taskId,
+        step.title,
+        step.status ?? "todo",
+        step.ord,
+        step.completed_at ?? null,
+      ]
     );
+    if (step.is_today) {
+      db.runSync(`UPDATE subtasks SET is_today = 1 WHERE id = ?`, [id]);
+    }
   }
 }
 
@@ -136,5 +158,29 @@ export function listSubtasksForTask(taskId: string): Subtask[] {
      WHERE task_id = ?
      ORDER BY ord ASC`,
     [taskId]
+  );
+}
+
+export function setSubtaskToday(subtaskId: string, isToday: boolean) {
+  db.runSync(`UPDATE subtasks SET is_today = ? WHERE id = ?`, [isToday ? 1 : 0, subtaskId]);
+}
+
+export function listTodaySubtasks(): TodaySubtask[] {
+  ensureDb();
+  return db.getAllSync<TodaySubtask>(
+    `SELECT
+       s.id,
+       s.task_id,
+       s.title,
+       s.status,
+       s.ord,
+       s.estimate_min,
+       s.completed_at,
+       s.is_today,
+       t.title as task_title
+     FROM subtasks s
+     INNER JOIN tasks t ON t.id = s.task_id
+     WHERE s.is_today = 1 AND t.status != 'archived'
+     ORDER BY t.created_at DESC, s.ord ASC`
   );
 }

@@ -19,6 +19,7 @@ import {
   listSubtasksForTask,
   listTasks,
   replaceSubtasks,
+  setSubtaskToday,
   updateSubtaskStatus,
   type Subtask,
 } from "../../src/db/taskRepo";
@@ -43,11 +44,37 @@ export default function TaskDetail() {
   const allDone = subtasks.length > 0 && doneIds.size === subtasks.length;
 
   function handleToggle(subtaskId: string, isDone: boolean) {
+    setSubtasks((prev) =>
+      prev.map((subtask) =>
+        subtask.id === subtaskId
+          ? {
+              ...subtask,
+              status: isDone ? "done" : "todo",
+              completed_at: isDone ? Date.now() : null,
+              is_today: isDone ? 0 : subtask.is_today,
+            }
+          : subtask
+      )
+    );
+
     setDoneIds((prev) => {
       const next = new Set(prev);
       isDone ? next.add(subtaskId) : next.delete(subtaskId);
       return next;
     });
+  }
+
+  function handleToggleToday(subtaskId: string) {
+    const current = subtasks.find((subtask) => subtask.id === subtaskId);
+    if (!current) return;
+
+    const nextIsToday = current.is_today ? 0 : 1;
+    setSubtaskToday(subtaskId, nextIsToday === 1);
+    setSubtasks((prev) =>
+      prev.map((subtask) =>
+        subtask.id === subtaskId ? { ...subtask, is_today: nextIsToday } : subtask
+      )
+    );
   }
 
   // ── More menu ──────────────────────────────────────────────────────────────
@@ -101,18 +128,22 @@ export default function TaskDetail() {
       // LLM-generated replacements start as 'todo'.
       const selectedSet = new Set(selectedIndices);
       const llmCount = newSteps.length - (subtasks.length - selectedIndices.length);
-      const stepMeta: { status: string; completed_at: number | null }[] = [];
+      const stepMeta: { status: string; completed_at: number | null; is_today: number }[] = [];
       let llmInserted = false;
       for (let i = 0; i < subtasks.length; i++) {
         if (selectedSet.has(i)) {
           if (!llmInserted) {
             for (let j = 0; j < llmCount; j++) {
-              stepMeta.push({ status: "todo", completed_at: null });
+              stepMeta.push({ status: "todo", completed_at: null, is_today: 0 });
             }
             llmInserted = true;
           }
         } else {
-          stepMeta.push({ status: subtasks[i].status, completed_at: subtasks[i].completed_at ?? null });
+          stepMeta.push({
+            status: subtasks[i].status,
+            completed_at: subtasks[i].completed_at ?? null,
+            is_today: subtasks[i].is_today ?? 0,
+          });
         }
       }
 
@@ -123,6 +154,7 @@ export default function TaskDetail() {
           ord: i,
           status: stepMeta[i]?.status ?? "todo",
           completed_at: stepMeta[i]?.completed_at ?? null,
+          is_today: stepMeta[i]?.is_today ?? 0,
         }))
       );
 
@@ -228,6 +260,7 @@ export default function TaskDetail() {
               subtask={sub}
               index={idx}
               onToggle={handleToggle}
+              onToggleToday={handleToggleToday}
               editMode={editMode}
               selected={selectedStepIds.has(sub.id)}
               onSelect={() => toggleStepSelect(sub.id)}
@@ -300,11 +333,12 @@ export default function TaskDetail() {
 // ─── Step Card ────────────────────────────────────────────────────────────────
 
 function StepCard({
-  subtask, index, onToggle, editMode, selected, onSelect,
+  subtask, index, onToggle, onToggleToday, editMode, selected, onSelect,
 }: {
   subtask: Subtask;
   index: number;
   onToggle: (id: string, isDone: boolean) => void;
+  onToggleToday: (id: string) => void;
   editMode: boolean;
   selected: boolean;
   onSelect: () => void;
@@ -355,6 +389,19 @@ function StepCard({
           <Text style={[styles.stepExplanation, done && !editMode && styles.stepTextDone]}>{explanation}</Text>
         )}
       </View>
+      {!editMode && (
+        <Pressable
+          onPress={() => onToggleToday(subtask.id)}
+          hitSlop={8}
+          style={styles.todayBtn}
+        >
+          <Ionicons
+            name={subtask.is_today ? "bookmark" : "bookmark-outline"}
+            size={18}
+            color={subtask.is_today ? "#f97316" : "#a1a1aa"}
+          />
+        </Pressable>
+      )}
     </View>
   );
 
@@ -482,6 +529,12 @@ const styles = StyleSheet.create({
   swipeActionText: { color: "#fff", fontSize: 11, fontWeight: "600" },
   stepTextDone: { color: "#c4c4c4", textDecorationLine: "line-through" },
   stepContent: { flex: 1, gap: 2 },
+  todayBtn: {
+    width: 28,
+    alignItems: "center",
+    paddingTop: 2,
+    flexShrink: 0,
+  },
   stepEmoji: { fontSize: 18, marginBottom: 2 },
   stepAction: { fontSize: 14, fontWeight: "600", color: "#18181b", lineHeight: 20 },
   stepExplanation: { fontSize: 12, color: "#71717a", lineHeight: 18, marginTop: 3 },
