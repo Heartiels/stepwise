@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
 import {
   Alert,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import {
@@ -25,6 +26,7 @@ type TaskWithSteps = Task & { subtasks: Subtask[] };
 
 export default function HistoryScreen() {
   const [tasks, setTasks] = useState<TaskWithSteps[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useFocusEffect(
     useCallback(() => {
@@ -43,6 +45,13 @@ export default function HistoryScreen() {
       setTasks(mapped);
     }, [])
   );
+
+  const filteredTasks = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return tasks;
+
+    return tasks.filter((task) => task.title.toLowerCase().includes(query));
+  }, [searchQuery, tasks]);
 
   function handleDelete(taskId: string) {
     Alert.alert("Delete goal?", "This will remove the goal and all its steps.", [
@@ -74,13 +83,33 @@ export default function HistoryScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.searchWrap}>
+          <Ionicons name="search-outline" size={16} color="#a1a1aa" />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search goals"
+            placeholderTextColor="#a1a1aa"
+            style={styles.searchInput}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+          />
+        </View>
+
         {tasks.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🌱</Text>
             <Text style={styles.emptyText}>No goals yet. Add one to get started!</Text>
           </View>
+        ) : filteredTasks.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyEmoji}>No results</Text>
+            <Text style={styles.emptyText}>No goals match "{searchQuery.trim()}".</Text>
+          </View>
         ) : (
-          tasks.map((task) => (
+          filteredTasks.map((task) => (
             <TaskCard
               key={task.id}
               task={task}
@@ -187,6 +216,25 @@ const styles = StyleSheet.create({
   },
 
   scroll: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 80 },
+
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#18181b",
+    paddingVertical: 0,
+  },
 
   emptyState: { alignItems: "center", marginTop: 80, gap: 12 },
   emptyEmoji: { fontSize: 48 },
