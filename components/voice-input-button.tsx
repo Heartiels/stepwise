@@ -160,9 +160,9 @@ export function VoiceInputButton({ onText }: VoiceInputButtonProps) {
         onPress={handlePress}
         disabled={isProcessing}
         style={{
-          width: 44,
-          height: 44,
-          borderRadius: 22,
+          width: 32,
+          height: 32,
+          borderRadius: 16,
           backgroundColor: isRecording ? "#E11D48" : "#111",
           alignItems: "center",
           justifyContent: "center",
@@ -171,14 +171,16 @@ export function VoiceInputButton({ onText }: VoiceInputButtonProps) {
       >
         <Ionicons
           name={isProcessing ? "hourglass-outline" : isRecording ? "stop" : "mic"}
-          size={18}
+          size={14}
           color="#fff"
         />
       </Pressable>
 
-      <Text style={{ marginTop: 6, fontSize: 12, color: isRecording ? "#E11D48" : "#71717a" }}>
-        {isProcessing ? "Processing..." : isRecording ? "Tap to stop" : "Tap to speak"}
-      </Text>
+      {(isRecording || isProcessing) && (
+        <Text style={{ marginTop: 4, fontSize: 10, color: isRecording ? "#E11D48" : "#71717a" }}>
+          {isProcessing ? "Processing..." : "Tap to stop"}
+        </Text>
+      )}
     </View>
   );
 }

@@ -81,6 +81,14 @@ export default function HomeScreen() {
         >
           <Pressable style={StyleSheet.absoluteFillObject} onPress={Keyboard.dismiss} />
 
+          <Pressable
+            onPress={() => { setModalVisible(false); router.push("/history"); }}
+            style={styles.modalHistoryBtn}
+            hitSlop={8}
+          >
+            <Ionicons name="time-outline" size={20} color="#fff" />
+          </Pressable>
+
           <View style={styles.dialog}>
             <Pressable
               onPress={() => setModalVisible(false)}
@@ -252,6 +260,18 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 48, marginBottom: 4 },
   emptyTitle: { fontSize: 20, fontWeight: "700", color: "#18181b" },
   emptySub: { fontSize: 14, color: "#a1a1aa" },
+
+  modalHistoryBtn: {
+    position: "absolute",
+    top: 52,
+    left: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#18181b",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   goalRow: {
   flexDirection: "row",

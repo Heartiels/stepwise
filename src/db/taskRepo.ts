@@ -107,6 +107,40 @@ export function setUserNickname(name: string) {
   setUserSetting("nickname", name);
 }
 
+export function getCurrentStreak(): number {
+  ensureDb();
+  const rows = db.getAllSync<{ day: string }>(
+    `SELECT DISTINCT date(completed_at / 1000, 'unixepoch', 'localtime') as day
+     FROM subtasks WHERE status = 'done' AND completed_at IS NOT NULL
+     ORDER BY day DESC`
+  );
+  if (rows.length === 0) return 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let streak = 0;
+  let cursor = today;
+
+  for (const row of rows) {
+    const rowDate = new Date(row.day);
+    rowDate.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((cursor.getTime() - rowDate.getTime()) / 86400000);
+    if (diffDays === 0 || (streak === 0 && diffDays === 1)) {
+      // Allow streak to start from yesterday if nothing done today yet
+      streak++;
+      cursor = rowDate;
+    } else if (diffDays === 1) {
+      streak++;
+      cursor = rowDate;
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}
+
 export function getCompletionsByDay(): Record<string, number> {
   ensureDb();
   const rows = db.getAllSync<{ day: string; count: number }>(

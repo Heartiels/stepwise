@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import {
   getCompletionsByDay,
+  getCurrentStreak,
   getUserNickname,
   getUserSetting,
   listSubtasksForTask,
@@ -79,7 +80,7 @@ function buildMonthLabels(grid: { date: string }[][]) {
 export default function ProfileScreen() {
   const [nickname, setNickname] = useState("My Name");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
-  const [stats, setStats] = useState({ inProgress: 0, completed: 0 });
+  const [stats, setStats] = useState({ streak: 0, completed: 0, total: 0 });
   const [completions, setCompletions] = useState<Record<string, number>>({});
 
   // Edit nickname modal
@@ -96,13 +97,14 @@ export default function ProfileScreen() {
       setCompletions(getCompletionsByDay());
 
       const tasks = listTasks();
-      let inProgress = 0, completed = 0;
+      let completed = 0, total = 0;
       for (const t of tasks) {
         const subs = listSubtasksForTask(t.id);
         if (subs.length === 0) continue;
-        subs.every((s) => s.status === "done") ? completed++ : inProgress++;
+        total++;
+        if (subs.every((s) => s.status === "done")) completed++;
       }
-      setStats({ inProgress, completed });
+      setStats({ streak: getCurrentStreak(), completed, total });
     }, [])
   );
 
@@ -194,16 +196,16 @@ export default function ProfileScreen() {
           <View style={styles.statItem}>
             <View style={styles.statTopRow}>
               <Ionicons name="flame-outline" size={20} color="#18181b" />
-              <Text style={styles.statNumber}>{stats.inProgress}</Text>
+              <Text style={styles.statNumber}>{stats.streak}</Text>
             </View>
-            <Text style={styles.statLabel}>In Progress</Text>
+            <Text style={styles.statLabel}>Current Streak</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <View style={styles.statTopRow}>
               <Ionicons name="bar-chart-outline" size={20} color="#18181b" />
               <Text style={styles.statNumber}>
-                {stats.completed}/{stats.inProgress + stats.completed}
+                {stats.completed}/{stats.total}
               </Text>
             </View>
             <Text style={styles.statLabel}>Goals Done</Text>

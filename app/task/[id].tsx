@@ -316,7 +316,7 @@ export default function TaskDetail() {
             onChangeText={setEditInput}
             placeholder={
               inputFocused
-                ? "e.g. Break each step into 3 smaller sub-steps\ne.g. I want to finish dinner before this step\ne.g. Reschedule the time"
+                ? "e.g.\n- Break each step into 3 smaller sub-steps\n- I want to finish dinner before this step\n- Reschedule the time"
                 : "What changes do you want to make..."
             }
             placeholderTextColor="#a1a1aa"
@@ -389,7 +389,7 @@ function StepCard({
           <Text style={[styles.stepExplanation, done && !editMode && styles.stepTextDone]}>{explanation}</Text>
         )}
       </View>
-      {!editMode && (
+      {!editMode && !done && (
         <Pressable
           onPress={() => onToggleToday(subtask.id)}
           hitSlop={8}
