@@ -173,6 +173,8 @@ npx expo start
 
 ## Recent Updates
 
+- Added **Edit Steps** — select individual steps and ask AI to revise them inline
+- Added **Profile page** with uploadable avatar, editable nickname, goal stats, and a GitHub-style contribution heatmap
 - Added voice goal input with microphone recording and OpenAI transcription
 - Added English-focused transcription behavior for voice input
 - Added a Today tab for focused daily execution
