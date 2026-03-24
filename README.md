@@ -179,5 +179,10 @@ npx expo start
 - Added bookmarking of subtasks into the Today view
 - Added search to the My Goals / history screen
 - Improved error handling for short recordings and failed transcription responses
+- Added **Edit Steps** — select individual steps and ask AI to revise them inline
+- Added **Profile page** with uploadable avatar, editable nickname, goal stats, and a GitHub-style contribution heatmap
+- Replaced "In Progress" stat with **Current Streak** (consecutive days with completed steps)
+- Fixed history button not being tappable when the goal modal is open
+- Bookmark icon now hides automatically when a step is marked as done
 
 ---

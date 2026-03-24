@@ -1,3 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
@@ -12,16 +15,16 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import {
   getCompletionsByDay,
   getCurrentStreak,
+  getPersonalContext,
+  getTotalPoints,
   getUserNickname,
   getUserSetting,
   listSubtasksForTask,
   listTasks,
+  setPersonalContext,
   setUserNickname,
   setUserSetting,
 } from "../../src/db/taskRepo";
@@ -80,7 +83,7 @@ function buildMonthLabels(grid: { date: string }[][]) {
 export default function ProfileScreen() {
   const [nickname, setNickname] = useState("My Name");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
-  const [stats, setStats] = useState({ streak: 0, completed: 0, total: 0 });
+  const [stats, setStats] = useState({ streak: 0, completed: 0, total: 0, points: 0 });
   const [completions, setCompletions] = useState<Record<string, number>>({});
 
   // Edit nickname modal
@@ -90,11 +93,16 @@ export default function ProfileScreen() {
   // Cell tap popup
   const [selectedCell, setSelectedCell] = useState<{ date: string; count: number } | null>(null);
 
+  // My Context
+  const [personalContext, setPersonalContextState] = useState("");
+  const MAX_CONTEXT = 800;
+
   useFocusEffect(
     useCallback(() => {
       setNickname(getUserNickname());
       setAvatarUri(getUserSetting("avatarUri") || null);
       setCompletions(getCompletionsByDay());
+      setPersonalContextState(getPersonalContext());
 
       const tasks = listTasks();
       let completed = 0, total = 0;
@@ -104,7 +112,7 @@ export default function ProfileScreen() {
         total++;
         if (subs.every((s) => s.status === "done")) completed++;
       }
-      setStats({ streak: getCurrentStreak(), completed, total });
+      setStats({ streak: getCurrentStreak(), completed, total, points: getTotalPoints() });
     }, [])
   );
 
@@ -195,7 +203,7 @@ export default function ProfileScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <View style={styles.statTopRow}>
-              <Ionicons name="flame-outline" size={20} color="#18181b" />
+              <Ionicons name="flame-outline" size={20} color="#f97316" />
               <Text style={styles.statNumber}>{stats.streak}</Text>
             </View>
             <Text style={styles.statLabel}>Current Streak</Text>
@@ -203,12 +211,20 @@ export default function ProfileScreen() {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <View style={styles.statTopRow}>
-              <Ionicons name="bar-chart-outline" size={20} color="#18181b" />
+              <Ionicons name="bar-chart-outline" size={20} color="#3b82f6" />
               <Text style={styles.statNumber}>
                 {stats.completed}/{stats.total}
               </Text>
             </View>
             <Text style={styles.statLabel}>Goals Done</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <View style={styles.statTopRow}>
+              <Ionicons name="star-outline" size={20} color="#eab308" />
+              <Text style={styles.statNumber}>{stats.points}</Text>
+            </View>
+            <Text style={styles.statLabel}>XP</Text>
           </View>
         </View>
 
@@ -274,6 +290,41 @@ export default function ProfileScreen() {
             </View>
           </View>
         </ScrollView>
+
+        {/* ── My Context ────────────────────────────────────────────── */}
+        <View style={styles.divider} />
+        <Text style={styles.sectionTitle}>My Context</Text>
+        <Text style={styles.sectionSub}>
+          Share your background, habits, or preferences.
+        </Text>
+        <View style={styles.contextWrap}>
+          <TextInput
+            value={personalContext}
+            onChangeText={(t) => {
+              if (t.length <= MAX_CONTEXT) {
+                setPersonalContextState(t);
+                setPersonalContext(t);
+              }
+            }}
+            placeholder="e.g. I'm a cs student. I prefer steps under 10 minutes. I don't have a car."
+            placeholderTextColor="#a1a1aa"
+            multiline
+            style={styles.contextInput}
+          />
+          <Text style={styles.contextCount}>{personalContext.length}/{MAX_CONTEXT}</Text>
+        </View>
+        <View style={styles.contextTips}>
+          {[
+            "The AI uses this to tailor every plan to your situation.",
+            "More detail = more personalized steps.",
+            "You can add preferences like \"I only have evenings free\" or \"no gym access\".",
+          ].map((tip, i) => (
+            <View key={i} style={styles.tipRow}>
+              <Text style={styles.tipIcon}>💡</Text>
+              <Text style={styles.tipText}>{tip}</Text>
+            </View>
+          ))}
+        </View>
 
       </ScrollView>
 
@@ -350,7 +401,7 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingBottom: 60 },
 
   // Avatar
-  profileRow: { flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 20 },
+  profileRow: { flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 10 },
   avatarWrapper: { position: "relative" },
   avatarPlaceholder: {
     width: 64, height: 64, borderRadius: 32,
@@ -463,4 +514,32 @@ const styles = StyleSheet.create({
     backgroundColor: "#18181b", alignItems: "center",
   },
   modalBtnPrimaryText: { fontSize: 15, fontWeight: "600", color: "#fff" },
+
+  contextWrap: {
+    borderWidth: 1,
+    borderColor: "#e4e4e7",
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 8,
+    marginBottom: 16,
+  },
+  contextInput: {
+    fontSize: 14,
+    color: "#18181b",
+    minHeight: 100,
+    textAlignVertical: "top",
+    lineHeight: 20,
+  },
+  contextCount: {
+    fontSize: 11,
+    color: "#a1a1aa",
+    textAlign: "right",
+    marginTop: 4,
+  },
+  contextTips: { gap: 8, marginBottom: 32 },
+  tipRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  tipIcon: { fontSize: 14, marginTop: 1 },
+  tipText: { flex: 1, fontSize: 13, color: "#71717a", lineHeight: 18 },
 });

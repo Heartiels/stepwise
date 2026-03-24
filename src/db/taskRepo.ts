@@ -107,6 +107,14 @@ export function setUserNickname(name: string) {
   setUserSetting("nickname", name);
 }
 
+export function getPersonalContext(): string {
+  return getUserSetting("personal_context", "");
+}
+
+export function setPersonalContext(value: string) {
+  setUserSetting("personal_context", value);
+}
+
 export function getCurrentStreak(): number {
   ensureDb();
   const rows = db.getAllSync<{ day: string }>(
@@ -139,6 +147,20 @@ export function getCurrentStreak(): number {
   }
 
   return streak;
+}
+
+export function setSubtaskXP(id: string, xp: number): void {
+  ensureDb();
+  db.runSync(`UPDATE subtasks SET xp = ? WHERE id = ?`, [xp, id]);
+}
+
+export function getTotalPoints(): number {
+  ensureDb();
+  const row = db.getFirstSync<{ total: number }>(
+    `SELECT SUM(CASE WHEN xp > 0 THEN xp ELSE 2 END) as total
+     FROM subtasks WHERE status = 'done'`
+  );
+  return row?.total ?? 0;
 }
 
 export function getCompletionsByDay(): Record<string, number> {

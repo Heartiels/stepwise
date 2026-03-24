@@ -20,10 +20,23 @@ import {
   listTasks,
   replaceSubtasks,
   setSubtaskToday,
+  setSubtaskXP,
   updateSubtaskStatus,
   type Subtask,
 } from "../../src/db/taskRepo";
 import { editSteps } from "../../src/services/openai";
+import { StepToast } from "../../components/step-toast";
+
+const MID_MESSAGES = [
+  "Nice work!",
+  "Keep it up!",
+  "One step closer!",
+  "Small wins add up!",
+  "You're making progress!",
+  "Strong momentum!",
+  "Good progress!",
+  "Way to go!",
+];
 
 const TRANSITION_DELAY = 380;
 const STEP_INTERVAL = 130;
@@ -43,7 +56,32 @@ export default function TaskDetail() {
   );
   const allDone = subtasks.length > 0 && doneIds.size === subtasks.length;
 
+  const [toast, setToast] = useState<{ xp: number; message: string } | null>(null);
+
   function handleToggle(subtaskId: string, isDone: boolean) {
+    if (isDone) {
+      const prevDoneCount = doneIds.size;
+      const totalCount = subtasks.length;
+      const remainingAfter = totalCount - prevDoneCount - 1;
+
+      let xp = 2;
+      let message: string;
+
+      if (prevDoneCount === 0) {
+        message = "Great start!";
+      } else if (remainingAfter === 0) {
+        xp = 5;
+        message = "Goal complete!";
+      } else if (remainingAfter === 1) {
+        message = "Just one step left!";
+      } else {
+        message = MID_MESSAGES[Math.floor(Math.random() * MID_MESSAGES.length)];
+      }
+
+      setSubtaskXP(subtaskId, xp);
+      setToast({ xp, message });
+    }
+
     setSubtasks((prev) =>
       prev.map((subtask) =>
         subtask.id === subtaskId
@@ -220,6 +258,15 @@ export default function TaskDetail() {
 
   return (
     <View style={styles.screen}>
+      {toast && (
+        <StepToast
+          visible={!!toast}
+          xp={toast.xp}
+          message={toast.message}
+          onHide={() => setToast(null)}
+        />
+      )}
+
       {/* ── Back button ───────────────────────────────────────────────── */}
       <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
         <Ionicons name="chevron-back" size={22} color="#18181b" />

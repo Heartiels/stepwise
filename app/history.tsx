@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -16,7 +17,6 @@ import {
   type Subtask,
   type Task,
 } from "../src/db/taskRepo";
-import { Ionicons } from "@expo/vector-icons";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -78,11 +78,8 @@ export default function HistoryScreen() {
         <View style={styles.backBtn} />
       </View>
 
-      {/* ── Goals List ──────────────────────────────────────────────── */}
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
+      {/* ── Search Bar (sticky) ─────────────────────────────────────── */}
+      <View style={styles.searchContainer}>
         <View style={styles.searchWrap}>
           <Ionicons name="search-outline" size={16} color="#a1a1aa" />
           <TextInput
@@ -97,7 +94,13 @@ export default function HistoryScreen() {
             clearButtonMode="while-editing"
           />
         </View>
+      </View>
 
+      {/* ── Goals List ──────────────────────────────────────────────── */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         {tasks.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🌱</Text>
@@ -215,8 +218,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 80 },
+  scroll: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 80 },
 
+  searchContainer: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    backgroundColor: "#f9f9fb",
+  },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -226,8 +234,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e4e4e7",
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 16,
+    paddingVertical: 16,
   },
   searchInput: {
     flex: 1,
@@ -275,10 +282,10 @@ const styles = StyleSheet.create({
   goalDate: { fontSize: 11, color: "#a1a1aa", marginBottom: 4 },
   taskTitleRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   taskTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
     color: "#18181b",
-    lineHeight: 26,
+    lineHeight: 22,
     flex: 1,
   },
   taskTitleDone: { color: "#a1a1aa", fontWeight: "600", fontSize: 15 },

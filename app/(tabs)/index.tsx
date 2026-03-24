@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
 import {
   Alert,
+  Animated,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -14,6 +15,7 @@ import {
 import {
   addSubtasks,
   addTask,
+  getPersonalContext,
   updateTaskNotes,
 } from "../../src/db/taskRepo";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,17 +23,45 @@ import { decomposeTask, type DecomposedTask } from "../../src/services/openai";
 import { Input } from "../../components/ui/input";
 import { VoiceInputButton } from "@/components/voice-input-button";
 
+const HINTS = [
+  "Scrolling TikTok in bed instead of starting that task.",
+  "Sitting on the couch watching Netflix while ignoring the mess.",
+  "Scrolling through old texts instead of making dinner.",
+  "Staring at my desk, still not starting the assignment.",
+];
+
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(true);
   const [goal, setGoal] = useState("");
   const [loading, setLoading] = useState(false);
+  const [hintIndex, setHintIndex] = useState(0);
+  const hintOpacity = useRef(new Animated.Value(1)).current;
 
   // Show modal every time the app opens
   useEffect(() => {
     setModalVisible(true);
   }, []);
+
+  // Rotate hints every 3 seconds with fade
+  useEffect(() => {
+    const interval = setInterval(() => {
+      Animated.timing(hintOpacity, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }).start(() => {
+        setHintIndex((i) => (i + 1) % HINTS.length);
+        Animated.timing(hintOpacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }).start();
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [hintOpacity]);
 
   async function handleDecompose() {
     const trimmed = goal.trim();
@@ -42,7 +72,7 @@ export default function HomeScreen() {
 
     setLoading(true);
     try {
-      const result: DecomposedTask = await decomposeTask(trimmed);
+      const result: DecomposedTask = await decomposeTask(trimmed, getPersonalContext());
 
       const taskId = addTask(trimmed);
       if (taskId) {
@@ -102,18 +132,27 @@ export default function HomeScreen() {
               What have you been procrastinating on?
             </Text>
             <Text style={styles.dialogSub}>
-              Tell me your goal and I'll break it into small, doable steps.
+              Tell me your goal — I'll break it into doable steps.
             </Text>
             <View style={styles.goalRow}>
-              <Input
-                value={goal}
-                onChangeText={setGoal}
-                placeholder="e.g. Start learning Spanish..."
-                multiline
-                numberOfLines={3}
-                style={[styles.dialogInput, { flex: 1 }]}
-                editable={!loading}
-              />
+              <View style={{ flex: 1 }}>
+                <Input
+                  value={goal}
+                  onChangeText={setGoal}
+                  multiline
+                  numberOfLines={3}
+                  style={styles.dialogInput}
+                  editable={!loading}
+                />
+                {goal.length === 0 && (
+                  <Animated.Text
+                    style={[styles.hintOverlay, { opacity: hintOpacity }]}
+                    pointerEvents="none"
+                  >
+                    {HINTS[hintIndex]}
+                  </Animated.Text>
+                )}
+              </View>
 
               <VoiceInputButton
                 onText={(t) => {
@@ -210,7 +249,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dialogInput: {
-    minHeight: 72,
+    minHeight: 100,
     textAlignVertical: "top",
     paddingTop: 12,
   },
@@ -274,10 +313,19 @@ const styles = StyleSheet.create({
   },
 
   goalRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 12,
-  marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 12,
+  },
+  hintOverlay: {
+    position: "absolute",
+    top: 12,
+    left: 16,
+    right: 16,
+    fontSize: 16,
+    color: "#a1a1aa",
+    pointerEvents: "none",
   },
 
 });

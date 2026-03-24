@@ -91,7 +91,7 @@ function mockDecomposeTask(goal: string): DecomposedTask {
   };
 }
 
-export async function decomposeTask(goal: string): Promise<DecomposedTask> {
+export async function decomposeTask(goal: string, personalContext?: string): Promise<DecomposedTask> {
   const trimmed = goal.trim();
   if (!trimmed) {
     throw new Error("Goal cannot be empty");
@@ -106,13 +106,17 @@ export async function decomposeTask(goal: string): Promise<DecomposedTask> {
     return mockDecomposeTask(trimmed);
   }
 
+  const systemPromptWithContext = personalContext?.trim()
+    ? `${SYSTEM_PROMPT}\n\n【User Context】\n${personalContext.trim()}`
+    : SYSTEM_PROMPT;
+
   try {
     const response = await openai.responses.create({
       model: "gpt-4o-mini",
       input: [
         {
           role: "system",
-          content: SYSTEM_PROMPT,
+          content: systemPromptWithContext,
         },
         {
           role: "user",

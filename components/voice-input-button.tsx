@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import { transcribeWithOpenAI } from "@/src/services/speech";
@@ -15,6 +15,7 @@ const MIN_RECORDING_MS = 700;
 export function VoiceInputButton({ onText }: VoiceInputButtonProps) {
   const recordingRef = useRef<Audio.Recording | null>(null);
   const startedAtRef = useRef<number | null>(null);
+  const startingRef = useRef(false); // prevents double-tap without flickering UI
   const [state, setState] = useState<RecorderState>("idle");
 
   useEffect(() => {
@@ -50,15 +51,15 @@ export function VoiceInputButton({ onText }: VoiceInputButtonProps) {
   }
 
   async function startRecording() {
-    if (state !== "idle") return;
-
-    setState("processing");
+    if (state !== "idle" || startingRef.current) return;
+    startingRef.current = true;
 
     try {
       await cleanupRecording();
 
       const permission = await Audio.requestPermissionsAsync();
       if (!permission.granted) {
+        startingRef.current = false;
         setState("idle");
         Alert.alert("Microphone permission is required.");
         return;
@@ -75,9 +76,11 @@ export function VoiceInputButton({ onText }: VoiceInputButtonProps) {
 
       recordingRef.current = recording;
       startedAtRef.current = Date.now();
+      startingRef.current = false;
       setState("recording");
     } catch (error: unknown) {
       await cleanupRecording();
+      startingRef.current = false;
       setState("idle");
       Alert.alert(
         "Failed to start recording",
@@ -176,11 +179,6 @@ export function VoiceInputButton({ onText }: VoiceInputButtonProps) {
         />
       </Pressable>
 
-      {(isRecording || isProcessing) && (
-        <Text style={{ marginTop: 4, fontSize: 10, color: isRecording ? "#E11D48" : "#71717a" }}>
-          {isProcessing ? "Processing..." : "Tap to stop"}
-        </Text>
-      )}
     </View>
   );
 }
