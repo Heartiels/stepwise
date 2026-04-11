@@ -5,12 +5,21 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   listTodaySubtasks,
   setSubtaskToday,
+  setSubtaskXP,
   updateSubtaskStatus,
   type TodaySubtask,
 } from "../../src/db/taskRepo";
+import { StepToast } from "../../components/step-toast";
+
+const MID_MESSAGES = [
+  "Nice work!", "Keep it up!", "One step closer!",
+  "Small wins add up!", "You're making progress!",
+  "Strong momentum!", "Good progress!", "Way to go!",
+];
 
 export default function TodayScreen() {
   const [subtasks, setSubtasks] = useState<TodaySubtask[]>([]);
+  const [toast, setToast] = useState<{ xp: number; message: string } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -24,8 +33,12 @@ export default function TodayScreen() {
   }
 
   function handleDone(subtaskId: string) {
+    const xp = 2;
+    const message = MID_MESSAGES[Math.floor(Math.random() * MID_MESSAGES.length)];
+    setSubtaskXP(subtaskId, xp);
     updateSubtaskStatus(subtaskId, "done");
     setSubtasks((prev) => prev.filter((subtask) => subtask.id !== subtaskId));
+    setToast({ xp, message });
   }
 
   return (
@@ -56,6 +69,12 @@ export default function TodayScreen() {
           ))
         )}
       </ScrollView>
+      <StepToast
+        visible={!!toast}
+        xp={toast?.xp ?? 0}
+        message={toast?.message ?? ""}
+        onHide={() => setToast(null)}
+      />
     </View>
   );
 }

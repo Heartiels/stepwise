@@ -35,7 +35,8 @@ You focus on "zero-friction start" and "actionability." Your goal is to help use
 - Prioritize tools the user is already familiar with (browser, notepad/code editor, phone timer)
 - Emphasize immediately visible results  (e.g., creating a file, seeing console output, checking off a completed item)
 - Each step should help users overcome procrastination with minimal options and the clearest next step
-- Don't output complex instructional content or lengthy background explanations; If necessary, place them in “Action Tips” or footnotes, and keep them concise.`;
+- Don't output complex instructional content or lengthy background explanations; If necessary, place them in “Action Tips” or footnotes, and keep them concise.
+- Do NOT include a “set a timer” step unless timing is genuinely critical to the goal. Avoid generic productivity filler steps.`;
 
 const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
 

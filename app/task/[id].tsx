@@ -4,7 +4,7 @@ import {
   Alert,
   Animated,
   Easing,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -124,6 +124,19 @@ export default function TaskDetail() {
   const [editInput, setEditInput] = useState("");
   const [inputFocused, setInputFocused] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardHeight(0)
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   function enterEditMode() {
     setMenuVisible(false);
@@ -330,10 +343,7 @@ export default function TaskDetail() {
 
       {/* ── Edit mode bottom sheet ────────────────────────────────────── */}
       {editMode && (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.editSheet}
-        >
+        <View style={[styles.editSheet, { bottom: keyboardHeight }]}>
           {/* Header row */}
           <View style={styles.editSheetHeader}>
             <Pressable onPress={exitEditMode} hitSlop={8}>
@@ -371,7 +381,7 @@ export default function TaskDetail() {
             onFocus={() => setInputFocused(true)}
             onBlur={() => setInputFocused(false)}
           />
-        </KeyboardAvoidingView>
+        </View>
       )}
     </View>
   );
@@ -630,5 +640,5 @@ const styles = StyleSheet.create({
     fontSize: 14, color: "#18181b", minHeight: 44,
     textAlignVertical: "top",
   },
-  editInputExpanded: { minHeight: 80 },
+  editInputExpanded: { minHeight: 120 },
 });

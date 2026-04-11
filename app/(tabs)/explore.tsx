@@ -52,7 +52,7 @@ function buildGrid(completions: Record<string, number>) {
   const todayMon = todayDow === 0 ? 6 : todayDow - 1;
 
   const startDate = new Date(today);
-  startDate.setDate(today.getDate() - (WEEKS * 7 - 1) - todayMon);
+  startDate.setDate(today.getDate() - todayMon - (WEEKS - 1) * 7);
 
   const grid: { date: string; count: number }[][] = [];
   for (let w = 0; w < WEEKS; w++) {
