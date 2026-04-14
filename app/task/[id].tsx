@@ -25,7 +25,7 @@ import {
   type Subtask,
 } from "../../src/db/taskRepo";
 import { editSteps } from "../../src/services/openai";
-import { StepToast } from "../../components/step-toast";
+import { FloatToast } from "../../components/step-toast";
 
 const MID_MESSAGES = [
   "Nice work!",
@@ -56,9 +56,9 @@ export default function TaskDetail() {
   );
   const allDone = subtasks.length > 0 && doneIds.size === subtasks.length;
 
-  const [toast, setToast] = useState<{ xp: number; message: string } | null>(null);
+  function handleToggle(subtaskId: string, isDone: boolean): { xp: number; message: string } | null {
+    let toastData: { xp: number; message: string } | null = null;
 
-  function handleToggle(subtaskId: string, isDone: boolean) {
     if (isDone) {
       const prevDoneCount = doneIds.size;
       const totalCount = subtasks.length;
@@ -79,7 +79,7 @@ export default function TaskDetail() {
       }
 
       setSubtaskXP(subtaskId, xp);
-      setToast({ xp, message });
+      toastData = { xp, message };
     }
 
     setSubtasks((prev) =>
@@ -100,6 +100,8 @@ export default function TaskDetail() {
       isDone ? next.add(subtaskId) : next.delete(subtaskId);
       return next;
     });
+
+    return toastData;
   }
 
   function handleToggleToday(subtaskId: string) {
@@ -271,15 +273,6 @@ export default function TaskDetail() {
 
   return (
     <View style={styles.screen}>
-      {toast && (
-        <StepToast
-          visible={!!toast}
-          xp={toast.xp}
-          message={toast.message}
-          onHide={() => setToast(null)}
-        />
-      )}
-
       {/* ── Back button ───────────────────────────────────────────────── */}
       <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
         <Ionicons name="chevron-back" size={22} color="#18181b" />
@@ -394,7 +387,7 @@ function StepCard({
 }: {
   subtask: Subtask;
   index: number;
-  onToggle: (id: string, isDone: boolean) => void;
+  onToggle: (id: string, isDone: boolean) => { xp: number; message: string } | null;
   onToggleToday: (id: string) => void;
   editMode: boolean;
   selected: boolean;
@@ -404,6 +397,7 @@ function StepCard({
   const y = useRef(new Animated.Value(12)).current;
   const swipeRef = useRef<Swipeable>(null);
   const [done, setDone] = useState(subtask.status === "done");
+  const [floatToast, setFloatToast] = useState<{ xp: number; message: string } | null>(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -416,7 +410,8 @@ function StepCard({
     const next = !done;
     setDone(next);
     updateSubtaskStatus(subtask.id, next ? "done" : "todo");
-    onToggle(subtask.id, next);
+    const toastData = onToggle(subtask.id, next);
+    if (toastData) setFloatToast(toastData);
     swipeRef.current?.close();
   }
 
@@ -430,35 +425,44 @@ function StepCard({
   const [emoji, action, explanation] = subtask.title.split("\n");
 
   const cardContent = (
-    <View style={styles.stepRow}>
-      <View style={[styles.stepBadge, done && !editMode && styles.stepBadgeDone]}>
-        {done && !editMode
-          ? <Ionicons name="close" size={14} color="#fff" />
-          : <Text style={styles.stepBadgeText}>{index + 1}</Text>
-        }
-      </View>
-      <View style={styles.stepContent}>
-        <Text style={[styles.stepAction, done && !editMode && styles.stepTextDone]}>
-          <Text style={[styles.stepEmoji, done && !editMode && styles.stepTextDone]}>{emoji ?? "•"} </Text>
-          {action ?? subtask.title}
-        </Text>
-        {!!explanation && (
-          <Text style={[styles.stepExplanation, done && !editMode && styles.stepTextDone]}>{explanation}</Text>
+    <View style={{ position: "relative" }}>
+      {floatToast && (
+        <FloatToast
+          xp={floatToast.xp}
+          message={floatToast.message}
+          onHide={() => setFloatToast(null)}
+        />
+      )}
+      <View style={styles.stepRow}>
+        <View style={[styles.stepBadge, done && !editMode && styles.stepBadgeDone]}>
+          {done && !editMode
+            ? <Ionicons name="close" size={14} color="#fff" />
+            : <Text style={styles.stepBadgeText}>{index + 1}</Text>
+          }
+        </View>
+        <View style={styles.stepContent}>
+          <Text style={[styles.stepAction, done && !editMode && styles.stepTextDone]}>
+            <Text style={[styles.stepEmoji, done && !editMode && styles.stepTextDone]}>{emoji ?? "•"} </Text>
+            {action ?? subtask.title}
+          </Text>
+          {!!explanation && (
+            <Text style={[styles.stepExplanation, done && !editMode && styles.stepTextDone]}>{explanation}</Text>
+          )}
+        </View>
+        {!done && (
+          <Pressable
+            onPress={() => !editMode && onToggleToday(subtask.id)}
+            hitSlop={8}
+            style={styles.todayBtn}
+          >
+            <Ionicons
+              name={subtask.is_today ? "bookmark" : "bookmark-outline"}
+              size={18}
+              color={subtask.is_today ? "#f97316" : "#a1a1aa"}
+            />
+          </Pressable>
         )}
       </View>
-      {!editMode && !done && (
-        <Pressable
-          onPress={() => onToggleToday(subtask.id)}
-          hitSlop={8}
-          style={styles.todayBtn}
-        >
-          <Ionicons
-            name={subtask.is_today ? "bookmark" : "bookmark-outline"}
-            size={18}
-            color={subtask.is_today ? "#f97316" : "#a1a1aa"}
-          />
-        </Pressable>
-      )}
     </View>
   );
 

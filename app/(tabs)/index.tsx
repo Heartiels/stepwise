@@ -184,14 +184,6 @@ export default function HomeScreen() {
         >
           <Pressable style={StyleSheet.absoluteFillObject} onPress={Keyboard.dismiss} />
 
-          <Pressable
-            onPress={() => { setModalVisible(false); router.push("/history"); }}
-            style={styles.modalHistoryBtn}
-            hitSlop={8}
-          >
-            <Ionicons name="time-outline" size={20} color="#fff" />
-          </Pressable>
-
           <View style={styles.dialog}>
             <Pressable
               onPress={() => setModalVisible(false)}

@@ -9,7 +9,7 @@ import {
   updateSubtaskStatus,
   type TodaySubtask,
 } from "../../src/db/taskRepo";
-import { StepToast } from "../../components/step-toast";
+import { FloatToast } from "../../components/step-toast";
 
 const MID_MESSAGES = [
   "Nice work!", "Keep it up!", "One step closer!",
@@ -19,7 +19,6 @@ const MID_MESSAGES = [
 
 export default function TodayScreen() {
   const [subtasks, setSubtasks] = useState<TodaySubtask[]>([]);
-  const [toast, setToast] = useState<{ xp: number; message: string } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -32,13 +31,16 @@ export default function TodayScreen() {
     setSubtasks((prev) => prev.filter((subtask) => subtask.id !== subtaskId));
   }
 
-  function handleDone(subtaskId: string) {
+  function handleDone(subtaskId: string, onAnimationEnd: () => void): { xp: number; message: string } {
     const xp = 2;
     const message = MID_MESSAGES[Math.floor(Math.random() * MID_MESSAGES.length)];
     setSubtaskXP(subtaskId, xp);
     updateSubtaskStatus(subtaskId, "done");
-    setSubtasks((prev) => prev.filter((subtask) => subtask.id !== subtaskId));
-    setToast({ xp, message });
+    // Remove card only after animation finishes
+    setTimeout(() => {
+      setSubtasks((prev) => prev.filter((subtask) => subtask.id !== subtaskId));
+    }, 700);
+    return { xp, message };
   }
 
   return (
@@ -64,17 +66,12 @@ export default function TodayScreen() {
               subtask={subtask}
               onOpen={() => router.push(`/task/${subtask.task_id}`)}
               onRemove={() => handleRemove(subtask.id)}
-              onDone={() => handleDone(subtask.id)}
+              onDone={(onAnimationEnd) => handleDone(subtask.id, onAnimationEnd)}
             />
           ))
+
         )}
       </ScrollView>
-      <StepToast
-        visible={!!toast}
-        xp={toast?.xp ?? 0}
-        message={toast?.message ?? ""}
-        onHide={() => setToast(null)}
-      />
     </View>
   );
 }
@@ -88,12 +85,21 @@ function TodayCard({
   subtask: TodaySubtask;
   onOpen: () => void;
   onRemove: () => void;
-  onDone: () => void;
+  onDone: (onAnimationEnd: () => void) => { xp: number; message: string };
 }) {
   const [emoji, action, explanation] = subtask.title.split("\n");
+  const [floatToast, setFloatToast] = useState<{ xp: number; message: string } | null>(null);
 
   return (
-    <Pressable style={styles.card} onPress={onOpen}>
+    <Pressable style={[styles.card, { position: "relative" }]} onPress={onOpen}>
+      {floatToast && (
+        <FloatToast
+          xp={floatToast.xp}
+          message={floatToast.message}
+          onHide={() => setFloatToast(null)}
+          anchorTop={52}
+        />
+      )}
       <View style={styles.cardTop}>
         <View style={styles.taskMeta}>
           <View style={styles.todayBadge}>
@@ -117,7 +123,7 @@ function TodayCard({
         <Pressable onPress={onRemove} style={[styles.actionBtn, styles.secondaryBtn]}>
           <Text style={styles.secondaryBtnText}>Remove</Text>
         </Pressable>
-        <Pressable onPress={onDone} style={[styles.actionBtn, styles.primaryBtn]}>
+        <Pressable onPress={() => { const toast = onDone(() => setFloatToast(null)); setFloatToast(toast); }} style={[styles.actionBtn, styles.primaryBtn]}>
           <Text style={styles.primaryBtnText}>Done</Text>
         </Pressable>
       </View>

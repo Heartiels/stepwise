@@ -1,82 +1,71 @@
 import { useEffect, useRef } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Text } from "react-native";
 
-type StepToastProps = {
-  visible: boolean;
+type FloatToastProps = {
   xp: number;
   message: string;
   onHide: () => void;
+  anchorTop?: number; // px from top of container; if omitted, centers vertically
 };
 
-export function StepToast({ visible, xp, message, onHide }: StepToastProps) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(-60)).current;
+export function FloatToast({ xp, message, onHide, anchorTop }: FloatToastProps) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!visible) return;
-
-    opacity.setValue(0);
-    translateY.setValue(-60);
-
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 220, useNativeDriver: true }),
-    ]).start(() => {
-      setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(opacity, { toValue: 0, duration: 280, useNativeDriver: true }),
-          Animated.timing(translateY, { toValue: -20, duration: 280, useNativeDriver: true }),
-        ]).start(() => onHide());
-      }, 1800);
-    });
-  }, [visible]);
-
-  if (!visible) return null;
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 600,
+        delay: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: -40,
+        duration: 900,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => onHide());
+  }, []);
 
   return (
-    <Animated.View style={[styles.toast, { opacity, transform: [{ translateY }] }]}>
-      <Text style={styles.emoji}>👍</Text>
-      <View style={styles.textBlock}>
-        <Text style={styles.message}>{message}</Text>
-        <Text style={styles.xp}>+{xp} XP</Text>
-      </View>
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: anchorTop !== undefined ? anchorTop : 0,
+        bottom: anchorTop !== undefined ? undefined : 0,
+        left: 0,
+        right: 0,
+        alignItems: "center",
+        justifyContent: anchorTop !== undefined ? "flex-start" : "center",
+        opacity,
+        transform: [{ translateY }],
+        zIndex: 20,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 15,
+          fontWeight: "800",
+          color: "#18181b",
+          textAlign: "center",
+          lineHeight: 22,
+        }}
+      >
+        {message}
+      </Text>
+      <Text
+        style={{
+          fontSize: 14,
+          fontWeight: "700",
+          color: "#f97316",
+          textAlign: "center",
+        }}
+      >
+        +{xp} XP
+      </Text>
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  toast: {
-    position: "absolute",
-    top: 64,
-    alignSelf: "center",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    backgroundColor: "#18181b",
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    elevation: 10,
-    zIndex: 999,
-  },
-  emoji: {
-    fontSize: 32,
-  },
-  textBlock: {
-    gap: 2,
-  },
-  message: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  xp: {
-    color: "#facc15",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-});
