@@ -1,21 +1,27 @@
 # Stepwise
 
-Stepwise is an AI-powered mobile app that helps users overcome procrastination by breaking big, overwhelming goals into small, actionable steps generated in seconds using an LLM.
+Stepwise is an AI-powered mobile productivity app designed to help users overcome procrastination by turning overwhelming goals into small, realistic actions they can start right away.
 
-Built with React Native + Expo as a course project, with a focus on:
-- **LLM-powered goal decomposition** via OpenAI GPT
-- **Offline-first persistence** - all tasks stored locally with SQLite (`expo-sqlite`)
-- **Clean, minimal design** - focused on reducing friction, not adding it
+Built with React Native + Expo as a course project, Stepwise focuses on:
+- **Low-friction task starting** with AI-generated micro-steps
+- **Offline-first local persistence** using SQLite
+- **Execution support** through Today planning, focus sessions, and progress feedback
+
+---
 
 ## Current Features
 
 - **Text or voice goal input** - users can type a goal or record it with the in-app microphone button
-- **AI-powered task decomposition** - goals are broken into small, actionable steps in seconds
-- **AI step refinement** - users can revise selected steps with follow-up AI editing
-- **Today focus view** - users can bookmark specific steps for today and view them in one focused tab
+- **AI-powered goal decomposition** - goals are broken into short, actionable steps in seconds
+- **AI step editing** - users can revise selected steps with follow-up AI instructions
+- **"I'm stuck" rescue flow** - a difficult step can be re-broken into even smaller actions
+- **Start Now focus mode** - users can launch a 5 / 10 / 15 minute focus block directly from a step
+- **Focus session tracking** - each step stores focus time and focus session count
+- **Today tab** - users can bookmark steps for today's execution
 - **Offline goal history** - all goals and subtasks are stored locally with SQLite
-- **Goal search** - users can search the My Goals / history page by title
-- **Progress tracking** - users can mark steps as done and review their activity over time
+- **Goal search** - users can search the history page by goal title
+- **Profile dashboard** - includes avatar, nickname, streak, XP, completion heatmap, and focus summary
+- **Local AI proxy server** - OpenAI requests are routed through a local Node server instead of exposing the API key in the mobile client
 
 ---
 
@@ -23,27 +29,26 @@ Built with React Native + Expo as a course project, with a focus on:
 
 - React Native (Expo)
 - TypeScript
-- Expo Router (file-based routing)
-- expo-av (audio recording)
-- expo-file-system (audio upload for transcription)
-- expo-sqlite (local offline database)
-- NativeWind v4 (Tailwind CSS for React Native)
+- Expo Router
+- expo-av
+- expo-file-system
+- expo-sqlite
+- NativeWind v4
 - OpenAI API
-- Local Node API proxy for secure OpenAI calls
+- Local Node.js API proxy
 
 ---
 
 ## Requirements
 
 ### 1) Install Node.js
-- **Node.js LTS is recommended** (more stable than the latest/current version)
+
+- Node.js LTS is recommended
 - Verify:
   ```bash
   node -v
   npm -v
   ```
-
-> Windows tip: if `node` / `npm` / `npx` are not found, it usually means Node was not added to PATH. Reinstall Node and enable "Add to PATH".
 
 ### 2) Install Git
 
@@ -51,45 +56,37 @@ Built with React Native + Expo as a course project, with a focus on:
   ```bash
   git --version
   ```
-- If Git is not installed:
-  - Windows: install **Git for Windows**
-  - macOS: install **Xcode Command Line Tools**
-    ```bash
-    xcode-select --install
-    ```
 
 ### 3) Install Expo Go on your phone
 
 - iOS: install **Expo Go** from the App Store
 - Android: install **Expo Go** from Google Play
-- You will run the app on your phone by scanning a QR code
 
-### 4) Create a `.env` file for AI features
+### 4) Create a `.env` file
 
-- The app supports AI-powered goal decomposition using OpenAI
-- This is **optional** - if no API key is provided, the app will use **mock data** instead
+Create a `.env` file in the repo root:
 
-- Create a file named `.env` in the **repo root** (same folder as `package.json`):
-  ```bash
-  OPENAI_API_KEY=your_openai_api_key_here
-  EXPO_PUBLIC_STEPWISE_API_BASE_URL=http://YOUR_COMPUTER_LAN_IP:8787
-  ```
+```bash
+OPENAI_API_KEY=your_openai_api_key_here
+EXPO_PUBLIC_STEPWISE_API_BASE_URL=http://YOUR_COMPUTER_LAN_IP:8787
+```
 
-> Notes:
-> - `OPENAI_API_KEY` is used only by the local API server, so it does **not** need the `EXPO_PUBLIC_` prefix
-> - `EXPO_PUBLIC_STEPWISE_API_BASE_URL` should point to your computer's LAN IP so Expo Go on your phone can reach the API server
-> - If the API server is not running, the app will still run, but AI decomposition will fall back to mock steps and voice input will be unavailable
+Notes:
+- `OPENAI_API_KEY` is used by the local API proxy server
+- `EXPO_PUBLIC_STEPWISE_API_BASE_URL` is used by the Expo app to reach that local server
+- If the API server is unavailable, goal decomposition falls back to mock data
+- Voice transcription and AI step editing require the API server to be running
+- If you are testing on a real phone with Expo Go, do **not** use `localhost`; use your computer's LAN IP
 
-### 5) Microphone permission for voice input
+### 5) Microphone permission
 
 - The app supports voice goal input
 - On first use, iOS / Android will ask for microphone permission
-- Voice transcription is currently tuned for **English input**
-- Tap the microphone once to start recording, then tap again to stop and transcribe
+- Voice transcription is currently tuned for English input
 
 ---
 
-## Getting Started (Run the App)
+## Getting Started
 
 ### Step 1 - Clone the repo
 
@@ -98,42 +95,32 @@ git clone https://github.com/Heartiels/stepwise.git
 cd stepwise
 ```
 
-> IMPORTANT: the **repo root** is the folder that contains `package.json`.
-> Make sure you run all commands inside that folder.
-
 ### Step 2 - Install dependencies
 
 ```bash
 npm install
 ```
 
-### Step 3 - Start the dev server
-
-```bash
-npx expo start
-```
-
-- You will see a QR code in the terminal
-
-### Step 4 - Start the local API server for AI features
+### Step 3 - Start the local AI proxy
 
 ```bash
 npm run server
 ```
 
-- The server runs on port `8787`
-- Keep this terminal open while using AI decomposition, step editing, or voice transcription
-- If your phone is using Expo Go, `EXPO_PUBLIC_STEPWISE_API_BASE_URL` must use your computer's local network IP, not `localhost`
+- The local API server runs on port `8787`
+- Keep this terminal open while using AI decomposition, AI editing, or voice transcription
+
+### Step 4 - Start Expo
+
+```bash
+npx expo start
+```
 
 ### Step 5 - Open on your phone
 
-- Connect your phone and your computer to the **same Wi-Fi**
-- Open **Expo Go**
-- Scan the QR code:
-  - iOS: use the **Camera** app (or scan inside Expo Go)
-  - Android: scan inside Expo Go
-
-> If everything is correct, the app should open within a few seconds.
+- Connect your phone and computer to the same Wi-Fi
+- Open Expo Go
+- Scan the QR code shown by Expo
 
 ---
 
@@ -142,61 +129,57 @@ npm run server
 ### Create a goal
 
 - Open the home screen modal
-- Type your goal manually, or tap the microphone to speak it
+- Type your goal, or tap the microphone to speak it
 - Tap **Break it down!** to generate a step-by-step plan
 
-### Manage a goal
+### Work through a goal
 
-- Open any goal from the history page
+- Open a goal from history
 - Swipe a step to mark it done or undo it
-- Tap the bookmark icon on a step to add or remove it from **Today**
-- Use **Edit Steps** to ask AI to revise selected steps
+- Tap the bookmark icon to add or remove a step from **Today**
+- Tap **Start now** to launch a focus session for that step
+- If a step feels too difficult, use the stuck flow to break it into smaller actions
+- Use **Edit Steps** to revise selected steps with AI
 
 ### Focus on today
 
 - Open the **Today** tab
 - Review only the steps you marked for today
-- Remove a step from Today or mark it done directly from that screen
+- Remove a step, start it immediately, or mark it done
 
-### Search goal history
+### Review progress
 
-- Open **My Goals**
-- Use the search bar at the top to filter goals by title in real time
+- Open **My Goals** to search goal history
+- Open **Profile** to view streak, XP, focus minutes, and completion heatmap
 
 ---
 
-## Project Structure (High-level)
+## Project Structure
 
-- `app/` - screens and routes (Expo Router, file-based)
-  - `(tabs)/` - tab navigator (home / today / profile)
-  - `(tabs)/today.tsx` - focused list of subtasks marked for today
-  - `history.tsx` - goal history screen with search
-  - `task/[id].tsx` - goal detail screen (dynamic route)
-  - `_layout.tsx` - root layout (`GestureHandlerRootView`, DB init)
-- `src/` - app logic
-  - `db/` - SQLite client, schema, and task repository
-  - `services/` - external API integrations (OpenAI + speech transcription)
-- `components/` - reusable UI components
-  - `voice-input-button.tsx` - tap-to-record voice input button
-  - `ui/` - primitives: Card, Input, Button, etc.
-- `hooks/` - custom React hooks
-- `constants/` - theme tokens
-- `assets/images/` - app icons and splash screen
+- `app/` - screens and routes
+  - `(tabs)/index.tsx` - home screen and goal creation modal
+  - `(tabs)/today.tsx` - daily execution view
+  - `(tabs)/explore.tsx` - profile and stats page
+  - `history.tsx` - searchable goal history
+  - `task/[id].tsx` - goal detail page and step editing flow
+- `components/` - reusable UI pieces
+  - `focus-session-sheet.tsx` - reusable focus session modal
+  - `step-toast.tsx` - XP / progress toast animation
+  - `voice-input-button.tsx` - voice capture trigger
+- `src/db/` - SQLite schema, migrations, and repository helpers
+- `src/services/` - client-side API helpers for AI and transcription
+- `src/tasks/` - step parsing and focus formatting helpers
+- `server/` - local Node.js API proxy for OpenAI requests
+
+---
 
 ## Recent Updates
 
-- Added **Edit Steps** — select individual steps and ask AI to revise them inline
-- Added **Profile page** with uploadable avatar, editable nickname, goal stats, and a GitHub-style contribution heatmap
-- Added voice goal input with microphone recording and OpenAI transcription
-- Added English-focused transcription behavior for voice input
-- Added a Today tab for focused daily execution
-- Added bookmarking of subtasks into the Today view
-- Added search to the My Goals / history screen
-- Improved error handling for short recordings and failed transcription responses
-- Added **Edit Steps** — select individual steps and ask AI to revise them inline
-- Added **Profile page** with uploadable avatar, editable nickname, goal stats, and a GitHub-style contribution heatmap
-- Replaced "In Progress" stat with **Current Streak** (consecutive days with completed steps)
-- Fixed history button not being tappable when the goal modal is open
-- Bookmark icon now hides automatically when a step is marked as done
+- Added **Start Now** focus sessions with 5 / 10 / 15 minute blocks
+- Added **focus session tracking** per step and a focus summary on the profile page
+- Added **I'm stuck** flow to break one difficult step into smaller actions
+- Refactored subtasks into structured fields (`emoji`, `action`, `explanation`) instead of relying only on parsed title text
+- Added a **local AI proxy server** so OpenAI requests no longer require exposing the API key in the Expo client
+- Integrated partner update for **inline floating XP toast** interactions
 
 ---
