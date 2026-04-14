@@ -5,6 +5,7 @@ import {
   Animated,
   Easing,
   Keyboard,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -50,6 +51,12 @@ type ActiveSession = {
   action: string;
   explanation: string;
 };
+
+// Generic icons for manually inserted steps
+const INSERT_ICONS = ["⭐", "🌟", "✨", "🔧", "🛠️", "🔩", "🎯", "💡", "📌", "📍"];
+function pickIcon() {
+  return INSERT_ICONS[Math.floor(Math.random() * INSERT_ICONS.length)];
+}
 
 export default function TaskDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -220,6 +227,8 @@ export default function TaskDetail() {
   const [editInput, setEditInput] = useState("");
   const [inputFocused, setInputFocused] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
+
+  // ── Keyboard height ────────────────────────────────────────────────────────
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
@@ -233,6 +242,13 @@ export default function TaskDetail() {
     );
     return () => { show.remove(); hide.remove(); };
   }, []);
+
+  // ── Edit mode (LLM) ────────────────────────────────────────────────────────
+  const [editMode, setEditMode] = useState(false);
+  const [selectedStepIds, setSelectedStepIds] = useState<Set<string>>(new Set());
+  const [editInput, setEditInput] = useState("");
+  const [inputFocused, setInputFocused] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
 
   function enterEditMode() {
     setMenuVisible(false);
@@ -349,6 +365,114 @@ export default function TaskDetail() {
     });
   }
 
+  // ── Long-press context menu ────────────────────────────────────────────────
+  const [contextMenu, setContextMenu] = useState<{ subtaskId: string; pageY: number } | null>(null);
+
+  function handleLongPress(subtaskId: string, pageY: number) {
+    setContextMenu({ subtaskId, pageY });
+  }
+
+  function handleDeleteStep(subtaskId: string) {
+    setContextMenu(null);
+    if (!task) return;
+    const next = subtasks.filter((s) => s.id !== subtaskId);
+    replaceSubtasks(task.id, next.map((s, i) => ({
+      emoji: s.emoji, action: s.action, explanation: s.explanation, ord: i,
+      status: s.status, completed_at: s.completed_at ?? null, is_today: s.is_today ?? 0,
+    })));
+    setSubtasks(listSubtasksForTask(task.id));
+    setDoneIds((prev) => { const n = new Set(prev); n.delete(subtaskId); return n; });
+  }
+
+  // ── Manual edit sheet ─────────────────────────────────────────────────────
+  const [manualEditSheet, setManualEditSheet] = useState<{ subtaskId: string } | null>(null);
+  const [manualEditInput, setManualEditInput] = useState("");
+  const [manualEditFocused, setManualEditFocused] = useState(false);
+
+  function openManualEditSheet(subtaskId: string) {
+    setContextMenu(null);
+    const sub = subtasks.find((s) => s.id === subtaskId);
+    setManualEditInput(sub?.action ?? "");
+    setManualEditFocused(false);
+    setManualEditSheet({ subtaskId });
+  }
+
+  function closeManualEditSheet() {
+    setManualEditSheet(null);
+    setManualEditInput("");
+    setManualEditFocused(false);
+  }
+
+  function handleSaveManualEdit() {
+    const text = manualEditInput.trim();
+    if (!text || !manualEditSheet || !task) return;
+
+    const sub = subtasks.find((s) => s.id === manualEditSheet.subtaskId);
+    if (!sub) return;
+
+    const next = subtasks.map((s) =>
+      s.id === manualEditSheet.subtaskId ? { ...s, action: text } : s
+    );
+    replaceSubtasks(task.id, next.map((s, i) => ({
+      emoji: s.emoji, action: s.action, explanation: s.explanation, ord: i,
+      status: s.status, completed_at: s.completed_at ?? null, is_today: s.is_today ?? 0,
+    })));
+    setSubtasks(listSubtasksForTask(task.id));
+    setRevision((r) => r + 1);
+    closeManualEditSheet();
+  }
+
+  // ── Insert sheet ───────────────────────────────────────────────────────────
+  const [insertSheet, setInsertSheet] = useState<{ subtaskId: string; position: "before" | "after" } | null>(null);
+  const [insertInput, setInsertInput] = useState("");
+  const [insertFocused, setInsertFocused] = useState(false);
+
+  function openInsertSheet(subtaskId: string, position: "before" | "after") {
+    setContextMenu(null);
+    setInsertInput("");
+    setInsertFocused(false);
+    setInsertSheet({ subtaskId, position });
+  }
+
+  function closeInsertSheet() {
+    setInsertSheet(null);
+    setInsertInput("");
+    setInsertFocused(false);
+  }
+
+  function handleSaveInsert() {
+    const text = insertInput.trim();
+    if (!text || !insertSheet || !task) return;
+
+    const icon = pickIcon();
+    const idx = subtasks.findIndex((s) => s.id === insertSheet.subtaskId);
+    if (idx === -1) return;
+
+    const insertAt = insertSheet.position === "before" ? idx : idx + 1;
+    const next = [...subtasks];
+    next.splice(insertAt, 0, {
+      id: "__new__",
+      task_id: task.id,
+      emoji: icon, action: text, explanation: "",
+      ord: insertAt, status: "todo", completed_at: null,
+      is_today: 0, xp: 0, focus_seconds: 0, focus_sessions: 0,
+    } as unknown as Subtask);
+
+    replaceSubtasks(task.id, next.map((s, i) => ({
+      emoji: s.emoji, action: s.action, explanation: s.explanation, ord: i,
+      status: s.id === "__new__" ? "todo" : s.status,
+      completed_at: s.id === "__new__" ? null : (s.completed_at ?? null),
+      is_today: s.id === "__new__" ? 0 : (s.is_today ?? 0),
+    })));
+
+    const updated = listSubtasksForTask(task.id);
+    setSubtasks(updated);
+    setDoneIds(new Set(updated.filter((s) => s.status === "done").map((s) => s.id)));
+    setRevision((r) => r + 1);
+    closeInsertSheet();
+  }
+
+  // ── Stamp animation ────────────────────────────────────────────────────────
   const stampScale = useRef(new Animated.Value(3)).current;
   const stampOpacity = useRef(new Animated.Value(0)).current;
   const stampRotate = useRef(new Animated.Value(-20)).current;
@@ -429,8 +553,8 @@ export default function TaskDetail() {
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setMenuVisible(false)} />
           <View style={styles.dropdownMenu}>
             <Pressable style={styles.dropdownItem} onPress={enterEditMode}>
-              <Ionicons name="create-outline" size={16} color="#18181b" />
-              <Text style={styles.dropdownItemText}>Edit Steps</Text>
+              <Ionicons name="sparkles-outline" size={16} color="#18181b" />
+              <Text style={styles.dropdownItemText}>AI Rewrite</Text>
             </Pressable>
           </View>
         </>
@@ -454,6 +578,7 @@ export default function TaskDetail() {
               editMode={editMode}
               selected={selectedStepIds.has(sub.id)}
               onSelect={() => toggleStepSelect(sub.id)}
+              onLongPress={(pageY) => handleLongPress(sub.id, pageY)}
             />
           ))}
         </View>
@@ -470,6 +595,7 @@ export default function TaskDetail() {
         <Text style={styles.stampText}>ALL DONE!</Text>
       </Animated.View>
 
+      {/* ── Edit mode bottom sheet (LLM) ──────────────────────────────── */}
       {editMode && (
         <View style={[styles.editSheet, { bottom: keyboardHeight }]}>
           <View style={styles.editSheetHeader}>
@@ -487,11 +613,7 @@ export default function TaskDetail() {
               </Text>
             </Pressable>
           </View>
-
-          <Text style={styles.editInstruction}>
-            Select steps to narrow the scope
-          </Text>
-
+          <Text style={styles.editInstruction}>Select steps to narrow the scope</Text>
           <TextInput
             style={[styles.editInput, inputFocused && styles.editInputExpanded]}
             value={editInput}
@@ -508,12 +630,113 @@ export default function TaskDetail() {
           />
         </View>
       )}
+
+      {/* ── Long-press context menu ────────────────────────────────────── */}
+      {contextMenu && (() => {
+        const cm = contextMenu!;
+        return (
+          <Modal transparent animationType="fade" statusBarTranslucent>
+            <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setContextMenu(null)} />
+            <View style={[styles.contextMenu, { position: "absolute", top: cm.pageY + 58, left: 40 }]}>
+              <Pressable style={styles.contextItem} onPress={() => openInsertSheet(cm.subtaskId, "before")}>
+                <Ionicons name="arrow-up-outline" size={17} color="#18181b" />
+                <Text style={styles.contextItemText}>Insert before</Text>
+              </Pressable>
+              <View style={styles.contextDivider} />
+              <Pressable style={styles.contextItem} onPress={() => openInsertSheet(cm.subtaskId, "after")}>
+                <Ionicons name="arrow-down-outline" size={17} color="#18181b" />
+                <Text style={styles.contextItemText}>Insert after</Text>
+              </Pressable>
+              <View style={styles.contextDivider} />
+              <Pressable style={styles.contextItem} onPress={() => openManualEditSheet(cm.subtaskId)}>
+                <Ionicons name="create-outline" size={17} color="#18181b" />
+                <Text style={styles.contextItemText}>Edit</Text>
+              </Pressable>
+              <View style={styles.contextDivider} />
+              <Pressable style={styles.contextItem} onPress={() => handleDeleteStep(cm.subtaskId)}>
+                <Ionicons name="trash-outline" size={17} color="#ef4444" />
+                <Text style={[styles.contextItemText, { color: "#ef4444" }]}>Delete</Text>
+              </Pressable>
+            </View>
+          </Modal>
+        );
+      })()}
+
+      {/* ── Manual edit sheet ────────────────────────────────────────── */}
+      {manualEditSheet && (
+        <Modal transparent animationType="slide" statusBarTranslucent>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={Keyboard.dismiss} />
+          <View style={[styles.editSheet, { bottom: keyboardHeight }]}>
+            <View style={styles.editSheetHeader}>
+              <Pressable onPress={closeManualEditSheet} hitSlop={8}>
+                <Text style={styles.editCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.editStartBtn, !manualEditInput.trim() && { opacity: 0.4 }]}
+                onPress={handleSaveManualEdit}
+                disabled={!manualEditInput.trim()}
+                hitSlop={8}
+              >
+                <Text style={styles.editStartText}>Save</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.editInstruction}>Edit step</Text>
+            <TextInput
+              style={[styles.editInput, manualEditFocused && styles.editInputExpanded]}
+              value={manualEditInput}
+              onChangeText={setManualEditInput}
+              placeholder="Describe the step..."
+              placeholderTextColor="#a1a1aa"
+              multiline
+              autoFocus
+              onFocus={() => setManualEditFocused(true)}
+              onBlur={() => setManualEditFocused(false)}
+            />
+          </View>
+        </Modal>
+      )}
+
+      {/* ── Insert sheet ──────────────────────────────────────────────── */}
+      {insertSheet && (
+        <Modal transparent animationType="slide" statusBarTranslucent>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={Keyboard.dismiss} />
+          <View style={[styles.editSheet, { bottom: keyboardHeight }]}>
+            <View style={styles.editSheetHeader}>
+              <Pressable onPress={closeInsertSheet} hitSlop={8}>
+                <Text style={styles.editCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.editStartBtn, !insertInput.trim() && { opacity: 0.4 }]}
+                onPress={handleSaveInsert}
+                disabled={!insertInput.trim()}
+                hitSlop={8}
+              >
+                <Text style={styles.editStartText}>Save</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.editInstruction}>
+              {insertSheet!.position === "before" ? "New step before this one" : "New step after this one"}
+            </Text>
+            <TextInput
+              style={[styles.editInput, insertFocused && styles.editInputExpanded]}
+              value={insertInput}
+              onChangeText={setInsertInput}
+              placeholder="Describe the step..."
+              placeholderTextColor="#a1a1aa"
+              multiline
+              autoFocus
+              onFocus={() => setInsertFocused(true)}
+              onBlur={() => setInsertFocused(false)}
+            />
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
 
 function StepCard({
-  subtask, index, onToggle, onToggleToday, onStart, editMode, selected, onSelect,
+  subtask, index, onToggle, onToggleToday, onStart, editMode, selected, onSelect, onLongPress,
 }: {
   subtask: Subtask;
   index: number;
@@ -523,10 +746,13 @@ function StepCard({
   editMode: boolean;
   selected: boolean;
   onSelect: () => void;
+  onLongPress: (pageY: number) => void;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const y = useRef(new Animated.Value(12)).current;
   const swipeRef = useRef<Swipeable>(null);
+  const cardRef = useRef<View>(null);
+  const pressScale = useRef(new Animated.Value(1)).current;
   const [done, setDone] = useState(subtask.status === "done");
   const [floatToast, setFloatToast] = useState<{ xp: number; message: string } | null>(null);
 
@@ -645,7 +871,24 @@ function StepCard({
         overshootRight={false}
         containerStyle={styles.stepCard}
       >
-        {cardContent}
+        <Pressable
+          onPressIn={() => {
+            Animated.spring(pressScale, { toValue: 1.03, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+          }}
+          onPressOut={() => {
+            Animated.spring(pressScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 4 }).start();
+          }}
+          onLongPress={(_e) => {
+            cardRef.current?.measure((_x, _y, _w, _h, _px, py) => {
+              onLongPress(py);
+            });
+          }}
+          delayLongPress={400}
+        >
+          <Animated.View ref={cardRef} style={{ transform: [{ scale: pressScale }] }}>
+            {cardContent}
+          </Animated.View>
+        </Pressable>
       </Swipeable>
     </Animated.View>
   );
@@ -697,7 +940,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1, shadowRadius: 12,
     elevation: 8,
-    minWidth: 160,
+    alignSelf: "flex-end",
     overflow: "hidden",
   },
   dropdownItem: {
@@ -809,6 +1052,7 @@ const styles = StyleSheet.create({
     letterSpacing: 4, textTransform: "uppercase",
   },
 
+  // Edit / insert bottom sheet
   editSheet: {
     position: "absolute", bottom: 0, left: 0, right: 0,
     backgroundColor: "#fff",
@@ -836,4 +1080,24 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   editInputExpanded: { minHeight: 120 },
+
+  // Context menu
+  contextOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "center", alignItems: "center",
+  },
+  contextMenu: {
+    width: 240,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15, shadowRadius: 20, elevation: 12,
+  },
+  contextItem: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 14, paddingHorizontal: 18,
+  },
+  contextItemText: { fontSize: 15, fontWeight: "500", color: "#18181b" },
+  contextDivider: { height: 1, backgroundColor: "#f4f4f5", marginHorizontal: 16 },
 });
