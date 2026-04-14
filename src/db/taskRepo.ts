@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from "./client";
 import { ensureDb } from "./ensure";
+import { formatStoredStepContent, type StepContent } from "../tasks/stepContent";
 
 export type Task = {
   id: string;
@@ -14,15 +15,26 @@ export type Subtask = {
   id: string;
   task_id: string;
   title: string;
+  emoji: string;
+  action: string;
+  explanation: string;
   status: string;
   ord: number;
   estimate_min: number;
+  focus_seconds: number;
+  focus_sessions: number;
   completed_at: number | null;
   is_today: number;
 };
 
 export type TodaySubtask = Subtask & {
   task_title: string;
+};
+
+export type FocusStats = {
+  totalSeconds: number;
+  totalMinutes: number;
+  totalSessions: number;
 };
 
 export function listTasks(): Task[] {
@@ -62,14 +74,22 @@ export function deleteTask(taskId: string) {
 
 export function addSubtasks(
   taskId: string,
-  steps: { title: string; ord: number }[]
+  steps: (StepContent & { ord: number })[]
 ) {
   for (const step of steps) {
     const id = uuidv4();
     db.runSync(
-      `INSERT INTO subtasks (id, task_id, title, status, ord, estimate_min, is_today)
-       VALUES (?, ?, ?, 'todo', ?, 10, 0)`,
-      [id, taskId, step.title, step.ord]
+      `INSERT INTO subtasks (id, task_id, title, emoji, action, explanation, status, ord, estimate_min, is_today)
+       VALUES (?, ?, ?, ?, ?, ?, 'todo', ?, 10, 0)`,
+      [
+        id,
+        taskId,
+        formatStoredStepContent(step),
+        step.emoji,
+        step.action,
+        step.explanation,
+        step.ord,
+      ]
     );
   }
 }
@@ -80,6 +100,18 @@ export function updateSubtaskStatus(subtaskId: string, status: "todo" | "done") 
      SET status = ?, completed_at = ?, is_today = CASE WHEN ? = 'done' THEN 0 ELSE is_today END
      WHERE id = ?`,
     [status, status === "done" ? Date.now() : null, status, subtaskId]
+  );
+}
+
+export function logFocusSession(subtaskId: string, seconds: number) {
+  const safeSeconds = Math.max(0, Math.round(seconds));
+  if (safeSeconds <= 0) return;
+
+  db.runSync(
+    `UPDATE subtasks
+     SET focus_seconds = focus_seconds + ?, focus_sessions = focus_sessions + 1
+     WHERE id = ?`,
+    [safeSeconds, subtaskId]
   );
 }
 
@@ -175,13 +207,36 @@ export function getCompletionsByDay(): Record<string, number> {
   return map;
 }
 
+export function getFocusStats(): FocusStats {
+  ensureDb();
+  const row = db.getFirstSync<{ totalSeconds: number | null; totalSessions: number | null }>(
+    `SELECT
+       SUM(focus_seconds) as totalSeconds,
+       SUM(focus_sessions) as totalSessions
+     FROM subtasks`
+  );
+
+  const totalSeconds = row?.totalSeconds ?? 0;
+  const totalSessions = row?.totalSessions ?? 0;
+
+  return {
+    totalSeconds,
+    totalMinutes: Math.round(totalSeconds / 60),
+    totalSessions,
+  };
+}
+
 export function replaceSubtasks(
   taskId: string,
   steps: {
-    title: string;
+    emoji: string;
+    action: string;
+    explanation: string;
     ord: number;
     status?: string;
     completed_at?: number | null;
+    focus_seconds?: number;
+    focus_sessions?: number;
     is_today?: number;
   }[]
 ) {
@@ -189,14 +244,19 @@ export function replaceSubtasks(
   for (const step of steps) {
     const id = uuidv4();
     db.runSync(
-      `INSERT INTO subtasks (id, task_id, title, status, ord, estimate_min, is_today, completed_at)
-       VALUES (?, ?, ?, ?, ?, 10, 0, ?)`,
+      `INSERT INTO subtasks (id, task_id, title, emoji, action, explanation, status, ord, estimate_min, focus_seconds, focus_sessions, is_today, completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 10, ?, ?, 0, ?)`,
       [
         id,
         taskId,
-        step.title,
+        formatStoredStepContent(step),
+        step.emoji,
+        step.action,
+        step.explanation,
         step.status ?? "todo",
         step.ord,
+        step.focus_seconds ?? 0,
+        step.focus_sessions ?? 0,
         step.completed_at ?? null,
       ]
     );
@@ -206,10 +266,67 @@ export function replaceSubtasks(
   }
 }
 
+export function replaceSubtaskWithSteps(
+  taskId: string,
+  subtaskId: string,
+  steps: StepContent[]
+): Subtask[] {
+  const current = listSubtasksForTask(taskId);
+  const targetIndex = current.findIndex((subtask) => subtask.id === subtaskId);
+
+  if (targetIndex === -1) {
+    return current;
+  }
+
+  const target = current[targetIndex];
+  const replacementSteps = steps.filter((step) => step.action.trim());
+  if (replacementSteps.length === 0) {
+    return current;
+  }
+
+  const nextSteps = current.flatMap((subtask, index) => {
+    if (index !== targetIndex) {
+      return [
+        {
+          emoji: subtask.emoji,
+          action: subtask.action,
+          explanation: subtask.explanation,
+          status: subtask.status,
+          completed_at: subtask.completed_at,
+          focus_seconds: subtask.focus_seconds,
+          focus_sessions: subtask.focus_sessions,
+          is_today: subtask.is_today,
+        },
+      ];
+    }
+
+    return replacementSteps.map((step, replacementIndex) => ({
+      emoji: step.emoji,
+      action: step.action,
+      explanation: step.explanation,
+      status: "todo",
+      completed_at: null,
+      focus_seconds: replacementIndex === 0 ? target.focus_seconds : 0,
+      focus_sessions: replacementIndex === 0 ? target.focus_sessions : 0,
+      is_today: target.is_today && replacementIndex === 0 ? 1 : 0,
+    }));
+  });
+
+  replaceSubtasks(
+    taskId,
+    nextSteps.map((step, index) => ({
+      ...step,
+      ord: index,
+    }))
+  );
+
+  return listSubtasksForTask(taskId);
+}
+
 export function listSubtasksForTask(taskId: string): Subtask[] {
   ensureDb();
   return db.getAllSync<Subtask>(
-    `SELECT id, task_id, title, status, ord, estimate_min, completed_at, is_today
+    `SELECT id, task_id, title, emoji, action, explanation, status, ord, estimate_min, focus_seconds, focus_sessions, completed_at, is_today
      FROM subtasks
      WHERE task_id = ?
      ORDER BY ord ASC`,
@@ -228,9 +345,14 @@ export function listTodaySubtasks(): TodaySubtask[] {
        s.id,
        s.task_id,
        s.title,
+       s.emoji,
+       s.action,
+       s.explanation,
        s.status,
        s.ord,
        s.estimate_min,
+       s.focus_seconds,
+       s.focus_sessions,
        s.completed_at,
        s.is_today,
        t.title as task_title

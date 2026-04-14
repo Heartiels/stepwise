@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { getApiBaseUrl } from "./api";
 
-const OPENAI_TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions";
 const MIN_FILE_SIZE_BYTES = 1024;
 const CJK_CHAR_REGEX = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
 
@@ -29,8 +29,8 @@ function parseTranscriptionError(status: number, body: string) {
 }
 
 export async function transcribeWithOpenAI(uri: string): Promise<string> {
-  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-  if (!apiKey) return "";
+  const baseUrl = getApiBaseUrl();
+  if (!baseUrl) return "";
 
   const fileUri = ensureFileUri(uri);
   const info = await FileSystem.getInfoAsync(fileUri);
@@ -44,7 +44,7 @@ export async function transcribeWithOpenAI(uri: string): Promise<string> {
     throw new Error("Recording was too short. Please speak a bit longer and try again.");
   }
 
-  const result = await FileSystem.uploadAsync(OPENAI_TRANSCRIPTIONS_URL, fileUri, {
+  const result = await FileSystem.uploadAsync(`${baseUrl}/api/transcribe`, fileUri, {
     httpMethod: "POST",
     uploadType: FileSystem.FileSystemUploadType.MULTIPART,
     fieldName: "file",
@@ -53,9 +53,6 @@ export async function transcribeWithOpenAI(uri: string): Promise<string> {
       model: "whisper-1",
       language: "en",
       prompt: "Transcribe the speech in English only. Keep English words in English. Do not translate into Chinese.",
-    },
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
     },
   });
 

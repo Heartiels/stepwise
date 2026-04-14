@@ -150,7 +150,9 @@ export default function HomeScreen() {
         addSubtasks(
           taskId,
           result.steps.map((s, i) => ({
-            title: `${s.emoji}\n${s.action}\n${s.explanation ?? ""}`,
+            emoji: s.emoji,
+            action: s.action,
+            explanation: s.explanation ?? "",
             ord: i,
           }))
         );
@@ -197,7 +199,7 @@ export default function HomeScreen() {
               What have you been procrastinating on?
             </Text>
             <Text style={styles.dialogSub}>
-              Tell me your goal — I'll break it into doable steps.
+              {"Tell me your goal — I'll break it into doable steps."}
             </Text>
             <View style={styles.goalRow}>
               <View style={{ flex: 1 }}>
@@ -272,7 +274,7 @@ export default function HomeScreen() {
       {/* ── Blank Main Content ────────────────────────────────────────── */}
       <View style={styles.emptyCenter}>
         <Text style={styles.emptyEmoji}>✨</Text>
-        <Text style={styles.emptyTitle}>What's your next goal?</Text>
+        <Text style={styles.emptyTitle}>{"What's your next goal?"}</Text>
         <Text style={styles.emptySub}>Tap + to break it down into steps.</Text>
       </View>
     </View>

@@ -18,6 +18,7 @@ import {
 import {
   getCompletionsByDay,
   getCurrentStreak,
+  getFocusStats,
   getPersonalContext,
   getTotalPoints,
   getUserNickname,
@@ -84,6 +85,7 @@ export default function ProfileScreen() {
   const [nickname, setNickname] = useState("My Name");
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [stats, setStats] = useState({ streak: 0, completed: 0, total: 0, points: 0 });
+  const [focusStats, setFocusStats] = useState({ totalMinutes: 0, totalSessions: 0 });
   const [completions, setCompletions] = useState<Record<string, number>>({});
 
   // Edit nickname modal
@@ -103,6 +105,7 @@ export default function ProfileScreen() {
       setAvatarUri(getUserSetting("avatarUri") || null);
       setCompletions(getCompletionsByDay());
       setPersonalContextState(getPersonalContext());
+      setFocusStats(getFocusStats());
 
       const tasks = listTasks();
       let completed = 0, total = 0;
@@ -226,6 +229,17 @@ export default function ProfileScreen() {
             </View>
             <Text style={styles.statLabel}>XP</Text>
           </View>
+        </View>
+
+        <View style={styles.focusCard}>
+          <View style={styles.focusCardHeader}>
+            <Text style={styles.focusCardTitle}>Focus Practice</Text>
+            <Ionicons name="timer-outline" size={18} color="#c2410c" />
+          </View>
+          <Text style={styles.focusCardValue}>{focusStats.totalMinutes} min</Text>
+          <Text style={styles.focusCardSub}>
+            {focusStats.totalSessions} session{focusStats.totalSessions === 1 ? "" : "s"} logged across your steps
+          </Text>
         </View>
 
         {/* ── Divider ───────────────────────────────────────────────── */}
@@ -443,6 +457,37 @@ const styles = StyleSheet.create({
   statDivider: { width: 1, backgroundColor: "#f0f0f0", marginVertical: 12 },
   statNumber: { fontSize: 24, fontWeight: "800", color: "#18181b" },
   statLabel: { fontSize: 12, color: "#71717a", fontWeight: "500" },
+  focusCard: {
+    marginTop: 14,
+    backgroundColor: "#fff7ed",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    padding: 16,
+    gap: 4,
+  },
+  focusCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  focusCardTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#9a3412",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  focusCardValue: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#18181b",
+  },
+  focusCardSub: {
+    fontSize: 13,
+    color: "#9a3412",
+    lineHeight: 18,
+  },
 
   // Heatmap
   monthRow: { height: 14, position: "relative", marginBottom: 4 },

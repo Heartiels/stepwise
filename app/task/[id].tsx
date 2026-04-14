@@ -18,14 +18,18 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   listSubtasksForTask,
   listTasks,
+  logFocusSession,
+  replaceSubtaskWithSteps,
   replaceSubtasks,
   setSubtaskToday,
   setSubtaskXP,
   updateSubtaskStatus,
   type Subtask,
 } from "../../src/db/taskRepo";
-import { editSteps } from "../../src/services/openai";
+import { breakStepIntoSmallerActions, editSteps } from "../../src/services/openai";
+import { FocusSessionSheet } from "../../components/focus-session-sheet";
 import { FloatToast } from "../../components/step-toast";
+import { formatFocusDurationLabel } from "../../src/tasks/focus";
 
 const MID_MESSAGES = [
   "Nice work!",
@@ -41,12 +45,18 @@ const MID_MESSAGES = [
 const TRANSITION_DELAY = 380;
 const STEP_INTERVAL = 130;
 
+type ActiveSession = {
+  subtaskId: string;
+  action: string;
+  explanation: string;
+};
+
 export default function TaskDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const task = useMemo(() => listTasks().find((t) => t.id === id) ?? null, [id]);
   const [subtasks, setSubtasks] = useState<Subtask[]>(() => listSubtasksForTask(id as string));
-  const [revision, setRevision] = useState(0); // bumping triggers animation replay
+  const [revision, setRevision] = useState(0);
 
   let actionTips: string[] = [];
   try { actionTips = task?.notes ? JSON.parse(task.notes) : []; } catch { actionTips = []; }
@@ -55,6 +65,9 @@ export default function TaskDetail() {
     () => new Set(subtasks.filter((s) => s.status === "done").map((s) => s.id))
   );
   const allDone = subtasks.length > 0 && doneIds.size === subtasks.length;
+  const [screenToast, setScreenToast] = useState<{ xp: number; message: string } | null>(null);
+  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
+  const [breakingStepId, setBreakingStepId] = useState<string | null>(null);
 
   function handleToggle(subtaskId: string, isDone: boolean): { xp: number; message: string } | null {
     let toastData: { xp: number; message: string } | null = null;
@@ -97,7 +110,11 @@ export default function TaskDetail() {
 
     setDoneIds((prev) => {
       const next = new Set(prev);
-      isDone ? next.add(subtaskId) : next.delete(subtaskId);
+      if (isDone) {
+        next.add(subtaskId);
+      } else {
+        next.delete(subtaskId);
+      }
       return next;
     });
 
@@ -117,10 +134,87 @@ export default function TaskDetail() {
     );
   }
 
-  // ── More menu ──────────────────────────────────────────────────────────────
-  const [menuVisible, setMenuVisible] = useState(false);
+  function syncSubtasks(nextSubtasks: Subtask[]) {
+    setSubtasks(nextSubtasks);
+    setDoneIds(new Set(nextSubtasks.filter((subtask) => subtask.status === "done").map((subtask) => subtask.id)));
+  }
 
-  // ── Edit mode ──────────────────────────────────────────────────────────────
+  function recordFocusSession(subtaskId: string, secondsSpent: number) {
+    const safeSeconds = Math.max(0, Math.round(secondsSpent));
+    if (safeSeconds <= 0) return;
+
+    logFocusSession(subtaskId, safeSeconds);
+    setSubtasks((prev) =>
+      prev.map((subtask) =>
+        subtask.id === subtaskId
+          ? {
+              ...subtask,
+              focus_seconds: subtask.focus_seconds + safeSeconds,
+              focus_sessions: subtask.focus_sessions + 1,
+            }
+          : subtask
+      )
+    );
+  }
+
+  function openFocusSession(subtask: Subtask) {
+    setActiveSession({
+      subtaskId: subtask.id,
+      action: subtask.action,
+      explanation: subtask.explanation,
+    });
+  }
+
+  function closeFocusSession() {
+    setActiveSession(null);
+    setBreakingStepId(null);
+  }
+
+  function handleFocusDone(secondsSpent: number) {
+    if (!activeSession) return;
+
+    recordFocusSession(activeSession.subtaskId, secondsSpent);
+    updateSubtaskStatus(activeSession.subtaskId, "done");
+    const toastData = handleToggle(activeSession.subtaskId, true);
+    if (toastData) setScreenToast(toastData);
+    closeFocusSession();
+  }
+
+  async function handleFocusStuck(secondsSpent: number) {
+    if (!task || !activeSession) return;
+
+    const selectedIndex = subtasks.findIndex((subtask) => subtask.id === activeSession.subtaskId);
+    if (selectedIndex === -1) {
+      closeFocusSession();
+      return;
+    }
+
+    setBreakingStepId(activeSession.subtaskId);
+    try {
+      recordFocusSession(activeSession.subtaskId, secondsSpent);
+      const currentSteps = subtasks.map((subtask) => ({
+        emoji: subtask.emoji,
+        action: subtask.action,
+        explanation: subtask.explanation,
+      }));
+      const updatedSteps = await breakStepIntoSmallerActions(task.title, currentSteps, selectedIndex);
+      const nextSubtasks = replaceSubtaskWithSteps(
+        task.id,
+        activeSession.subtaskId,
+        updatedSteps
+      );
+
+      syncSubtasks(nextSubtasks);
+      setRevision((current) => current + 1);
+      closeFocusSession();
+      Alert.alert("Step updated", "I broke that step into smaller actions so it's easier to restart.");
+    } catch (err: any) {
+      Alert.alert("Couldn't revise this step", err?.message ?? "Please try again.");
+      setBreakingStepId(null);
+    }
+  }
+
+  const [menuVisible, setMenuVisible] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedStepIds, setSelectedStepIds] = useState<Set<string>>(new Set());
   const [editInput, setEditInput] = useState("");
@@ -162,32 +256,47 @@ export default function TaskDetail() {
     }
     if (!task) return;
 
-    // Map selected IDs to 0-based indices
     const selectedIndices = subtasks
       .map((s, i) => (selectedStepIds.has(s.id) ? i : -1))
       .filter((i) => i !== -1);
 
-    // Parse current subtasks into DecomposedStep format
-    const currentSteps = subtasks.map((s) => {
-      const [emoji, action, explanation] = s.title.split("\n");
-      return { emoji: emoji ?? "", action: action ?? "", explanation: explanation ?? "" };
-    });
+    const currentSteps = subtasks.map((subtask) => ({
+      emoji: subtask.emoji,
+      action: subtask.action,
+      explanation: subtask.explanation,
+    }));
 
     setEditLoading(true);
     try {
       const newSteps = await editSteps(task.title, currentSteps, selectedIndices, editInput.trim());
 
-      // Compute per-step status: non-selected steps preserve their original status,
-      // LLM-generated replacements start as 'todo'.
       const selectedSet = new Set(selectedIndices);
       const llmCount = newSteps.length - (subtasks.length - selectedIndices.length);
-      const stepMeta: { status: string; completed_at: number | null; is_today: number }[] = [];
+      const selectedFocusSeconds = subtasks
+        .filter((subtask) => selectedStepIds.has(subtask.id))
+        .reduce((sum, subtask) => sum + subtask.focus_seconds, 0);
+      const selectedFocusSessions = subtasks
+        .filter((subtask) => selectedStepIds.has(subtask.id))
+        .reduce((sum, subtask) => sum + subtask.focus_sessions, 0);
+      const stepMeta: {
+        status: string;
+        completed_at: number | null;
+        focus_seconds: number;
+        focus_sessions: number;
+        is_today: number;
+      }[] = [];
       let llmInserted = false;
       for (let i = 0; i < subtasks.length; i++) {
         if (selectedSet.has(i)) {
           if (!llmInserted) {
             for (let j = 0; j < llmCount; j++) {
-              stepMeta.push({ status: "todo", completed_at: null, is_today: 0 });
+              stepMeta.push({
+                status: "todo",
+                completed_at: null,
+                focus_seconds: j === 0 ? selectedFocusSeconds : 0,
+                focus_sessions: j === 0 ? selectedFocusSessions : 0,
+                is_today: 0,
+              });
             }
             llmInserted = true;
           }
@@ -195,6 +304,8 @@ export default function TaskDetail() {
           stepMeta.push({
             status: subtasks[i].status,
             completed_at: subtasks[i].completed_at ?? null,
+            focus_seconds: subtasks[i].focus_seconds ?? 0,
+            focus_sessions: subtasks[i].focus_sessions ?? 0,
             is_today: subtasks[i].is_today ?? 0,
           });
         }
@@ -203,17 +314,20 @@ export default function TaskDetail() {
       replaceSubtasks(
         task.id,
         newSteps.map((s, i) => ({
-          title: `${s.emoji}\n${s.action}\n${s.explanation}`,
+          emoji: s.emoji,
+          action: s.action,
+          explanation: s.explanation,
           ord: i,
           status: stepMeta[i]?.status ?? "todo",
           completed_at: stepMeta[i]?.completed_at ?? null,
+          focus_seconds: stepMeta[i]?.focus_seconds ?? 0,
+          focus_sessions: stepMeta[i]?.focus_sessions ?? 0,
           is_today: stepMeta[i]?.is_today ?? 0,
         }))
       );
 
       const updated = listSubtasksForTask(task.id);
-      setSubtasks(updated);
-      setDoneIds(new Set(updated.filter((s) => s.status === "done").map((s) => s.id)));
+      syncSubtasks(updated);
       setRevision((r) => r + 1);
       exitEditMode();
     } catch (err: any) {
@@ -226,19 +340,24 @@ export default function TaskDetail() {
   function toggleStepSelect(stepId: string) {
     setSelectedStepIds((prev) => {
       const next = new Set(prev);
-      next.has(stepId) ? next.delete(stepId) : next.add(stepId);
+      if (next.has(stepId)) {
+        next.delete(stepId);
+      } else {
+        next.add(stepId);
+      }
       return next;
     });
   }
 
-  // ── Stamp animation ────────────────────────────────────────────────────────
   const stampScale = useRef(new Animated.Value(3)).current;
   const stampOpacity = useRef(new Animated.Value(0)).current;
   const stampRotate = useRef(new Animated.Value(-20)).current;
 
   useEffect(() => {
     if (allDone) {
-      stampScale.setValue(3); stampOpacity.setValue(0); stampRotate.setValue(-20);
+      stampScale.setValue(3);
+      stampOpacity.setValue(0);
+      stampRotate.setValue(-20);
       Animated.parallel([
         Animated.spring(stampScale, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }),
         Animated.timing(stampOpacity, { toValue: 1, duration: 120, useNativeDriver: true }),
@@ -249,7 +368,6 @@ export default function TaskDetail() {
     }
   }, [allDone]);
 
-  // ── Step reveal ────────────────────────────────────────────────────────────
   const [visibleCount, setVisibleCount] = useState(0);
 
   useEffect(() => {
@@ -273,20 +391,39 @@ export default function TaskDetail() {
 
   return (
     <View style={styles.screen}>
-      {/* ── Back button ───────────────────────────────────────────────── */}
+      {screenToast && (
+        <FloatToast
+          xp={screenToast.xp}
+          message={screenToast.message}
+          onHide={() => setScreenToast(null)}
+          anchorTop={116}
+        />
+      )}
+      {activeSession && task && (
+        <FocusSessionSheet
+          visible={!!activeSession}
+          taskTitle={task.title}
+          action={activeSession.action}
+          explanation={activeSession.explanation}
+          loadingStuck={breakingStepId === activeSession.subtaskId}
+          onClose={closeFocusSession}
+          onLogSession={(seconds) => recordFocusSession(activeSession.subtaskId, seconds)}
+          onDone={handleFocusDone}
+          onStuck={handleFocusStuck}
+        />
+      )}
+
       <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
         <Ionicons name="chevron-back" size={22} color="#18181b" />
         <Text style={styles.backText}>Goals</Text>
       </Pressable>
 
-      {/* ── More button ───────────────────────────────────────────────── */}
       <Pressable onPress={() => setMenuVisible((v) => !v)} style={styles.moreBtn} hitSlop={8}>
         <View style={styles.moreCircle}>
           <Ionicons name="ellipsis-horizontal" size={16} color="#18181b" />
         </View>
       </Pressable>
 
-      {/* ── Dropdown menu ─────────────────────────────────────────────── */}
       {menuVisible && (
         <>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setMenuVisible(false)} />
@@ -299,7 +436,6 @@ export default function TaskDetail() {
         </>
       )}
 
-      {/* ── Scroll content ────────────────────────────────────────────── */}
       <ScrollView
         contentContainerStyle={[styles.scroll, editMode && { paddingBottom: 260 }]}
         showsVerticalScrollIndicator={false}
@@ -314,6 +450,7 @@ export default function TaskDetail() {
               index={idx}
               onToggle={handleToggle}
               onToggleToday={handleToggleToday}
+              onStart={openFocusSession}
               editMode={editMode}
               selected={selectedStepIds.has(sub.id)}
               onSelect={() => toggleStepSelect(sub.id)}
@@ -326,7 +463,6 @@ export default function TaskDetail() {
         )}
       </ScrollView>
 
-      {/* ── All-done stamp ────────────────────────────────────────────── */}
       <Animated.View
         pointerEvents="none"
         style={[styles.stamp, { opacity: stampOpacity, transform: [{ scale: stampScale }, { rotate: stampRotateDeg }] }]}
@@ -334,10 +470,8 @@ export default function TaskDetail() {
         <Text style={styles.stampText}>ALL DONE!</Text>
       </Animated.View>
 
-      {/* ── Edit mode bottom sheet ────────────────────────────────────── */}
       {editMode && (
         <View style={[styles.editSheet, { bottom: keyboardHeight }]}>
-          {/* Header row */}
           <View style={styles.editSheetHeader}>
             <Pressable onPress={exitEditMode} hitSlop={8}>
               <Text style={styles.editCancelText}>Cancel</Text>
@@ -354,12 +488,10 @@ export default function TaskDetail() {
             </Pressable>
           </View>
 
-          {/* Instruction */}
           <Text style={styles.editInstruction}>
             Select steps to narrow the scope
           </Text>
 
-          {/* Input */}
           <TextInput
             style={[styles.editInput, inputFocused && styles.editInputExpanded]}
             value={editInput}
@@ -380,15 +512,14 @@ export default function TaskDetail() {
   );
 }
 
-// ─── Step Card ────────────────────────────────────────────────────────────────
-
 function StepCard({
-  subtask, index, onToggle, onToggleToday, editMode, selected, onSelect,
+  subtask, index, onToggle, onToggleToday, onStart, editMode, selected, onSelect,
 }: {
   subtask: Subtask;
   index: number;
   onToggle: (id: string, isDone: boolean) => { xp: number; message: string } | null;
   onToggleToday: (id: string) => void;
+  onStart: (subtask: Subtask) => void;
   editMode: boolean;
   selected: boolean;
   onSelect: () => void;
@@ -406,6 +537,10 @@ function StepCard({
     ]).start();
   }, []);
 
+  useEffect(() => {
+    setDone(subtask.status === "done");
+  }, [subtask.status]);
+
   function handleToggle() {
     const next = !done;
     setDone(next);
@@ -422,10 +557,10 @@ function StepCard({
     </View>
   );
 
-  const [emoji, action, explanation] = subtask.title.split("\n");
+  const { emoji, action, explanation } = subtask;
 
   const cardContent = (
-    <View style={{ position: "relative" }}>
+    <View style={styles.stepCardInner}>
       {floatToast && (
         <FloatToast
           xp={floatToast.xp}
@@ -433,6 +568,7 @@ function StepCard({
           onHide={() => setFloatToast(null)}
         />
       )}
+
       <View style={styles.stepRow}>
         <View style={[styles.stepBadge, done && !editMode && styles.stepBadgeDone]}>
           {done && !editMode
@@ -443,15 +579,15 @@ function StepCard({
         <View style={styles.stepContent}>
           <Text style={[styles.stepAction, done && !editMode && styles.stepTextDone]}>
             <Text style={[styles.stepEmoji, done && !editMode && styles.stepTextDone]}>{emoji ?? "•"} </Text>
-            {action ?? subtask.title}
+            {action}
           </Text>
           {!!explanation && (
             <Text style={[styles.stepExplanation, done && !editMode && styles.stepTextDone]}>{explanation}</Text>
           )}
         </View>
-        {!done && (
+        {!editMode && !done && (
           <Pressable
-            onPress={() => !editMode && onToggleToday(subtask.id)}
+            onPress={() => onToggleToday(subtask.id)}
             hitSlop={8}
             style={styles.todayBtn}
           >
@@ -463,6 +599,26 @@ function StepCard({
           </Pressable>
         )}
       </View>
+
+      {subtask.focus_sessions > 0 && (
+        <View style={styles.focusMetaRow}>
+          <View style={styles.focusMetaBadge}>
+            <Ionicons name="timer-outline" size={12} color="#c2410c" />
+            <Text style={styles.focusMetaText}>
+              {formatFocusDurationLabel(subtask.focus_seconds)} · {subtask.focus_sessions} session{subtask.focus_sessions > 1 ? "s" : ""}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {!editMode && !done && (
+        <View style={styles.stepUtilityRow}>
+          <Pressable onPress={() => onStart(subtask)} style={styles.startNowBtn}>
+            <Ionicons name="flash" size={14} color="#c2410c" />
+            <Text style={styles.startNowBtnText}>Start now</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 
@@ -495,8 +651,6 @@ function StepCard({
   );
 }
 
-// ─── Tips Card ────────────────────────────────────────────────────────────────
-
 function TipsCard({ tips }: { tips: string[] }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const y = useRef(new Animated.Value(12)).current;
@@ -517,8 +671,6 @@ function TipsCard({ tips }: { tips: string[] }) {
     </Animated.View>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f9f9fb" },
@@ -574,6 +726,9 @@ const styles = StyleSheet.create({
     borderColor: "#f97316", borderWidth: 2,
     shadowColor: "#f97316", shadowOpacity: 0.15,
   },
+  stepCardInner: {
+    gap: 12,
+  },
   stepRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   stepBadge: {
     width: 26, height: 26, borderRadius: 13,
@@ -599,6 +754,43 @@ const styles = StyleSheet.create({
   stepEmoji: { fontSize: 18, marginBottom: 2 },
   stepAction: { fontSize: 14, fontWeight: "600", color: "#18181b", lineHeight: 20 },
   stepExplanation: { fontSize: 12, color: "#71717a", lineHeight: 18, marginTop: 3 },
+  stepUtilityRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  startNowBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#fff7ed",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  startNowBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#c2410c",
+  },
+  focusMetaRow: {
+    flexDirection: "row",
+  },
+  focusMetaBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#fff7ed",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  focusMetaText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#c2410c",
+  },
 
   tipsCard: {
     backgroundColor: "#fff", borderRadius: 16, borderWidth: 1,
@@ -617,7 +809,6 @@ const styles = StyleSheet.create({
     letterSpacing: 4, textTransform: "uppercase",
   },
 
-  // Edit mode bottom sheet
   editSheet: {
     position: "absolute", bottom: 0, left: 0, right: 0,
     backgroundColor: "#fff",

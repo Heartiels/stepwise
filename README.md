@@ -29,6 +29,7 @@ Built with React Native + Expo as a course project, with a focus on:
 - expo-sqlite (local offline database)
 - NativeWind v4 (Tailwind CSS for React Native)
 - OpenAI API
+- Local Node API proxy for secure OpenAI calls
 
 ---
 
@@ -70,13 +71,14 @@ Built with React Native + Expo as a course project, with a focus on:
 
 - Create a file named `.env` in the **repo root** (same folder as `package.json`):
   ```bash
-  EXPO_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+  OPENAI_API_KEY=your_openai_api_key_here
+  EXPO_PUBLIC_STEPWISE_API_BASE_URL=http://YOUR_COMPUTER_LAN_IP:8787
   ```
 
 > Notes:
-> - The variable name must start with `EXPO_PUBLIC_` so Expo can read it in the app
-> - If `.env` is missing, the app will still run, but AI decomposition will return mock steps
-> - Voice transcription also uses the same OpenAI API key
+> - `OPENAI_API_KEY` is used only by the local API server, so it does **not** need the `EXPO_PUBLIC_` prefix
+> - `EXPO_PUBLIC_STEPWISE_API_BASE_URL` should point to your computer's LAN IP so Expo Go on your phone can reach the API server
+> - If the API server is not running, the app will still run, but AI decomposition will fall back to mock steps and voice input will be unavailable
 
 ### 5) Microphone permission for voice input
 
@@ -113,7 +115,17 @@ npx expo start
 
 - You will see a QR code in the terminal
 
-### Step 4 - Open on your phone
+### Step 4 - Start the local API server for AI features
+
+```bash
+npm run server
+```
+
+- The server runs on port `8787`
+- Keep this terminal open while using AI decomposition, step editing, or voice transcription
+- If your phone is using Expo Go, `EXPO_PUBLIC_STEPWISE_API_BASE_URL` must use your computer's local network IP, not `localhost`
+
+### Step 5 - Open on your phone
 
 - Connect your phone and your computer to the **same Wi-Fi**
 - Open **Expo Go**

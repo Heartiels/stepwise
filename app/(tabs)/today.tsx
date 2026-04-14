@@ -1,15 +1,21 @@
 import { useCallback, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
+  listSubtasksForTask,
   listTodaySubtasks,
+  logFocusSession,
+  replaceSubtaskWithSteps,
   setSubtaskToday,
   setSubtaskXP,
   updateSubtaskStatus,
   type TodaySubtask,
 } from "../../src/db/taskRepo";
+import { breakStepIntoSmallerActions } from "../../src/services/openai";
+import { FocusSessionSheet } from "../../components/focus-session-sheet";
 import { FloatToast } from "../../components/step-toast";
+import { formatFocusDurationLabel } from "../../src/tasks/focus";
 
 const MID_MESSAGES = [
   "Nice work!", "Keep it up!", "One step closer!",
@@ -17,13 +23,28 @@ const MID_MESSAGES = [
   "Strong momentum!", "Good progress!", "Way to go!",
 ];
 
+type ActiveTodaySession = {
+  subtaskId: string;
+  taskId: string;
+  taskTitle: string;
+  action: string;
+  explanation: string;
+};
+
 export default function TodayScreen() {
   const [subtasks, setSubtasks] = useState<TodaySubtask[]>([]);
+  const [activeSession, setActiveSession] = useState<ActiveTodaySession | null>(null);
+  const [breakingStepId, setBreakingStepId] = useState<string | null>(null);
+  const [screenToast, setScreenToast] = useState<{ xp: number; message: string } | null>(null);
+
+  const refreshToday = useCallback(() => {
+    setSubtasks(listTodaySubtasks().filter((subtask) => subtask.status !== "done"));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      setSubtasks(listTodaySubtasks().filter((subtask) => subtask.status !== "done"));
-    }, [])
+      refreshToday();
+    }, [refreshToday])
   );
 
   function handleRemove(subtaskId: string) {
@@ -31,20 +52,129 @@ export default function TodayScreen() {
     setSubtasks((prev) => prev.filter((subtask) => subtask.id !== subtaskId));
   }
 
-  function handleDone(subtaskId: string, onAnimationEnd: () => void): { xp: number; message: string } {
+  function handleDone(
+    subtaskId: string,
+    onAnimationEnd: () => void
+  ): { xp: number; message: string } {
     const xp = 2;
     const message = MID_MESSAGES[Math.floor(Math.random() * MID_MESSAGES.length)];
     setSubtaskXP(subtaskId, xp);
     updateSubtaskStatus(subtaskId, "done");
-    // Remove card only after animation finishes
+
     setTimeout(() => {
+      onAnimationEnd();
       setSubtasks((prev) => prev.filter((subtask) => subtask.id !== subtaskId));
     }, 700);
+
     return { xp, message };
+  }
+
+  function recordFocusSession(subtaskId: string, secondsSpent: number) {
+    const safeSeconds = Math.max(0, Math.round(secondsSpent));
+    if (safeSeconds <= 0) return;
+
+    logFocusSession(subtaskId, safeSeconds);
+    setSubtasks((prev) =>
+      prev.map((subtask) =>
+        subtask.id === subtaskId
+          ? {
+              ...subtask,
+              focus_seconds: subtask.focus_seconds + safeSeconds,
+              focus_sessions: subtask.focus_sessions + 1,
+            }
+          : subtask
+      )
+    );
+  }
+
+  function openFocusSession(subtask: TodaySubtask) {
+    setActiveSession({
+      subtaskId: subtask.id,
+      taskId: subtask.task_id,
+      taskTitle: subtask.task_title,
+      action: subtask.action,
+      explanation: subtask.explanation,
+    });
+  }
+
+  function closeFocusSession() {
+    setActiveSession(null);
+    setBreakingStepId(null);
+  }
+
+  function handleFocusDone(secondsSpent: number) {
+    if (!activeSession) return;
+
+    recordFocusSession(activeSession.subtaskId, secondsSpent);
+    const toast = handleDone(activeSession.subtaskId, () => setScreenToast(null));
+    setScreenToast(toast);
+    closeFocusSession();
+  }
+
+  async function handleFocusStuck(secondsSpent: number) {
+    if (!activeSession) return;
+
+    setBreakingStepId(activeSession.subtaskId);
+    try {
+      recordFocusSession(activeSession.subtaskId, secondsSpent);
+      const currentTaskSubtasks = listSubtasksForTask(activeSession.taskId);
+      const selectedIndex = currentTaskSubtasks.findIndex((subtask) => subtask.id === activeSession.subtaskId);
+
+      if (selectedIndex === -1) {
+        closeFocusSession();
+        return;
+      }
+
+      const currentSteps = currentTaskSubtasks.map((subtask) => ({
+        emoji: subtask.emoji,
+        action: subtask.action,
+        explanation: subtask.explanation,
+      }));
+      const updatedSteps = await breakStepIntoSmallerActions(
+        activeSession.taskTitle,
+        currentSteps,
+        selectedIndex
+      );
+
+      replaceSubtaskWithSteps(
+        activeSession.taskId,
+        activeSession.subtaskId,
+        updatedSteps
+      );
+
+      refreshToday();
+      closeFocusSession();
+      Alert.alert("Step updated", "I broke that Today step into smaller actions so you can restart faster.");
+    } catch (err: any) {
+      Alert.alert("Couldn't revise this step", err?.message ?? "Please try again.");
+      setBreakingStepId(null);
+    }
   }
 
   return (
     <View style={styles.screen}>
+      {screenToast && (
+        <FloatToast
+          xp={screenToast.xp}
+          message={screenToast.message}
+          onHide={() => setScreenToast(null)}
+          anchorTop={84}
+        />
+      )}
+      {activeSession && (
+        <FocusSessionSheet
+          visible={!!activeSession}
+          taskTitle={activeSession.taskTitle}
+          action={activeSession.action}
+          explanation={activeSession.explanation}
+          loadingStuck={breakingStepId === activeSession.subtaskId}
+          onClose={closeFocusSession}
+          onLogSession={(seconds) => recordFocusSession(activeSession.subtaskId, seconds)}
+          onDone={handleFocusDone}
+          onStuck={handleFocusStuck}
+        />
+      )}
+
       <View style={styles.header}>
         <Text style={styles.pageTitle}>Today</Text>
         <Text style={styles.pageSub}>Focus on the next small step.</Text>
@@ -67,9 +197,9 @@ export default function TodayScreen() {
               onOpen={() => router.push(`/task/${subtask.task_id}`)}
               onRemove={() => handleRemove(subtask.id)}
               onDone={(onAnimationEnd) => handleDone(subtask.id, onAnimationEnd)}
+              onStart={() => openFocusSession(subtask)}
             />
           ))
-
         )}
       </ScrollView>
     </View>
@@ -81,13 +211,15 @@ function TodayCard({
   onOpen,
   onRemove,
   onDone,
+  onStart,
 }: {
   subtask: TodaySubtask;
   onOpen: () => void;
   onRemove: () => void;
   onDone: (onAnimationEnd: () => void) => { xp: number; message: string };
+  onStart: () => void;
 }) {
-  const [emoji, action, explanation] = subtask.title.split("\n");
+  const { emoji, action, explanation } = subtask;
   const [floatToast, setFloatToast] = useState<{ xp: number; message: string } | null>(null);
 
   return (
@@ -100,6 +232,7 @@ function TodayCard({
           anchorTop={52}
         />
       )}
+
       <View style={styles.cardTop}>
         <View style={styles.taskMeta}>
           <View style={styles.todayBadge}>
@@ -115,15 +248,32 @@ function TodayCard({
 
       <Text style={styles.stepAction}>
         <Text style={styles.stepEmoji}>{emoji ?? "•"} </Text>
-        {action ?? subtask.title}
+        {action}
       </Text>
       {!!explanation && <Text style={styles.stepExplanation}>{explanation}</Text>}
+      {subtask.focus_sessions > 0 && (
+        <View style={styles.focusMetaBadge}>
+          <Ionicons name="timer-outline" size={12} color="#c2410c" />
+          <Text style={styles.focusMetaText}>
+            {formatFocusDurationLabel(subtask.focus_seconds)} · {subtask.focus_sessions} session{subtask.focus_sessions > 1 ? "s" : ""}
+          </Text>
+        </View>
+      )}
 
       <View style={styles.actionRow}>
         <Pressable onPress={onRemove} style={[styles.actionBtn, styles.secondaryBtn]}>
           <Text style={styles.secondaryBtnText}>Remove</Text>
         </Pressable>
-        <Pressable onPress={() => { const toast = onDone(() => setFloatToast(null)); setFloatToast(toast); }} style={[styles.actionBtn, styles.primaryBtn]}>
+        <Pressable onPress={onStart} style={[styles.actionBtn, styles.startBtn]}>
+          <Text style={styles.startBtnText}>Start now</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            const toast = onDone(() => setFloatToast(null));
+            setFloatToast(toast);
+          }}
+          style={[styles.actionBtn, styles.primaryBtn]}
+        >
           <Text style={styles.primaryBtnText}>Done</Text>
         </Pressable>
       </View>
@@ -237,6 +387,22 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: "#71717a",
   },
+  focusMetaBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    marginTop: 10,
+    backgroundColor: "#fff7ed",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  focusMetaText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#c2410c",
+  },
   actionRow: {
     flexDirection: "row",
     gap: 10,
@@ -257,6 +423,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#71717a",
+  },
+  startBtn: {
+    backgroundColor: "#fff7ed",
+    borderWidth: 1,
+    borderColor: "#fed7aa",
+  },
+  startBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#c2410c",
   },
   primaryBtn: {
     backgroundColor: "#18181b",

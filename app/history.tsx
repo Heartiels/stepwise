@@ -109,7 +109,7 @@ export default function HistoryScreen() {
         ) : filteredTasks.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>No results</Text>
-            <Text style={styles.emptyText}>No goals match "{searchQuery.trim()}".</Text>
+            <Text style={styles.emptyText}>{`No goals match "${searchQuery.trim()}".`}</Text>
           </View>
         ) : (
           filteredTasks.map((task) => (

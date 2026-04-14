@@ -116,7 +116,7 @@ export function VoiceInputButton({ onText }: VoiceInputButtonProps) {
       if (!text) {
         Alert.alert(
           "Voice input unavailable",
-          "No speech was detected, or the OpenAI API key is missing."
+          "No speech was detected, or the Stepwise API server is not running."
         );
         return;
       }

@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { hasApiBaseUrl, postJson } from "./api";
 
 export type DecomposedStep = {
   emoji: string;
@@ -12,47 +12,6 @@ export type DecomposedTask = {
   actionTips: string[];
 };
 
-const SYSTEM_PROMPT = `【System Role】
-You focus on "zero-friction start" and "actionability." Your goal is to help users break down their goals into immediately executable small steps with minimal cognitive cost, spark instant sense of achievement, and help users get started and keep moving forward.
-
-【Input】
-- The user provides only a one-sentence goal (e.g., "I want to learn JavaScript"). Always treat this sentence as the only context, unless the user proactively provides more constraints or preferences.
-- If the user explicitly states they are in a "hands-free" or "mobile" scenario, you may include an alternative hands-free step in the output.
-
-【Output Format & Style Requirements】
-- Number of steps: 5-9.
-- Each step consists of two lines:
-  1. A short action sentence with emoji (verb-first, be specific)
-  2. A brief explanation (1-2 sentences explaining the immediate reward or why it lowers the barrier)
-- The first step must be a "physical action" completable in ≤ 60 seconds ((e.g., turn on computer, create a folder, pick up a pen))
-- Remaining steps should be completable in ≤5 minutes each
-- Language style: concise, standalone, actionable, avoid piling on technical details
-- Content: short sentences, just enough info, suitable for low-energy users to execute immediately.
-- No complex setup, installation, or multiple inputs required; No ads or links leading to complex external processes (resource names like “MDN” or “official tutorial” are acceptable)
-- Must include exactly 3 "Action Tips" (short phrases), providing specific instant motivation and anti-stuck techniques relevant to this specific goal ((e.g., 5-minute self-check, fixed time slots, immediate rewards upon completion, etc.))
-
-【Generation Rules】
-- Prioritize tools the user is already familiar with (browser, notepad/code editor, phone timer)
-- Emphasize immediately visible results  (e.g., creating a file, seeing console output, checking off a completed item)
-- Each step should help users overcome procrastination with minimal options and the clearest next step
-- Don't output complex instructional content or lengthy background explanations; If necessary, place them in “Action Tips” or footnotes, and keep them concise.
-- Do NOT include a “set a timer” step unless timing is genuinely critical to the goal. Avoid generic productivity filler steps.`;
-
-const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-
-// Lazy init
-let client: OpenAI | null = null;
-function getClient() {
-  if (!apiKey) return null;
-  if (!client) {
-    client = new OpenAI({
-      apiKey,
-    });
-  }
-  return client;
-}
-
-//  Mock fallback
 function mockDecomposeTask(goal: string): DecomposedTask {
   const t = goal.trim() || "My Goal";
   return {
@@ -92,176 +51,90 @@ function mockDecomposeTask(goal: string): DecomposedTask {
   };
 }
 
+function mockBreakStepIntoSmallerActions(step: DecomposedStep): DecomposedStep[] {
+  const action = step.action.trim() || "Keep moving";
+  const explanation = step.explanation.trim();
+
+  return [
+    {
+      emoji: "👀",
+      action: `Look at "${action}" and name the smallest visible move`,
+      explanation: "Remove the pressure to finish everything. Just decide what the first tiny move is.",
+    },
+    {
+      emoji: "✍️",
+      action: `Do one tiny piece of "${action}"`,
+      explanation: explanation || "Aim for something you can finish in a minute or two so momentum shows up quickly.",
+    },
+    {
+      emoji: "➡️",
+      action: "Stop and choose the next tiny move",
+      explanation: "Once you have motion, capture the next easiest action before your brain starts negotiating again.",
+    },
+  ];
+}
+
 export async function decomposeTask(goal: string, personalContext?: string): Promise<DecomposedTask> {
   const trimmed = goal.trim();
   if (!trimmed) {
     throw new Error("Goal cannot be empty");
   }
 
-  //  No key => use mock instead of crashing
-  const openai = getClient();
-  if (!openai) {
-    console.warn(
-      "[Stepwise] EXPO_PUBLIC_OPENAI_API_KEY not found. Using mock decomposition data."
-    );
+  if (!hasApiBaseUrl()) {
+    console.warn("[Stepwise] API server not configured. Using mock decomposition data.");
     return mockDecomposeTask(trimmed);
   }
 
-  const systemPromptWithContext = personalContext?.trim()
-    ? `${SYSTEM_PROMPT}\n\n【User Context】\n${personalContext.trim()}`
-    : SYSTEM_PROMPT;
-
   try {
-    const response = await openai.responses.create({
-      model: "gpt-4o-mini",
-      input: [
-        {
-          role: "system",
-          content: systemPromptWithContext,
-        },
-        {
-          role: "user",
-          content: `Break this goal into steps: ${trimmed}`,
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "task_decomposition",
-          strict: true,
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              title: { type: "string" },
-              steps: {
-                type: "array",
-                minItems: 5,
-                maxItems: 9,
-                items: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    emoji: { type: "string" },
-                    action: { type: "string" },
-                    explanation: { type: "string" },
-                  },
-                  required: ["emoji", "action", "explanation"],
-                },
-              },
-              actionTips: {
-                type: "array",
-                minItems: 3,
-                maxItems: 3,
-                items: { type: "string" },
-              },
-            },
-            required: ["title", "steps", "actionTips"],
-          },
-        },
-      },
+    return await postJson<DecomposedTask>("/api/decompose", {
+      goal: trimmed,
+      personalContext: personalContext?.trim() ?? "",
     });
-
-    const parsed = JSON.parse(response.output_text) as DecomposedTask;
-
-    if (!parsed?.title || !Array.isArray(parsed?.steps) || parsed.steps.length === 0) {
-      throw new Error("Invalid OpenAI response format");
-    }
-
-    return parsed;
   } catch (err) {
-    console.warn("[Stepwise] OpenAI request failed. Falling back to mock data.", err);
+    console.warn("[Stepwise] API request failed. Falling back to mock decomposition data.", err);
     return mockDecomposeTask(trimmed);
   }
 }
 
-// ─── Edit existing steps ───────────────────────────────────────────────────────
-
 export async function editSteps(
   goalTitle: string,
   currentSteps: DecomposedStep[],
-  selectedIndices: number[], // 0-based; empty = apply to all
+  selectedIndices: number[],
   userRequest: string
 ): Promise<DecomposedStep[]> {
-  const openai = getClient();
-  if (!openai) throw new Error("OpenAI API key not configured.");
-
-  const isPartial = selectedIndices.length > 0;
-
-  // Only send selected steps to LLM — non-selected steps never touch LLM
-  const stepsToEdit = isPartial
-    ? selectedIndices.map((i) => currentSteps[i])
-    : currentSteps;
-
-  const stepsText = stepsToEdit
-    .map((s, i) => `Step ${i + 1}: ${s.emoji} ${s.action} — ${s.explanation}`)
-    .join("\n");
-
-  const systemPrompt = `You are a productivity coach helping a user refine steps of an action plan.
-You may return more or fewer steps than provided (e.g. break one step into multiple).
-Keep each explanation to 1-2 sentences max. Return ONLY valid JSON.`;
-
-  const userMessage = isPartial
-    ? `Goal: "${goalTitle}"\n\nStep(s) to modify:\n${stepsText}\n\nUser's request: ${userRequest}\n\nReturn the replacement step(s).`
-    : `Goal: "${goalTitle}"\n\nCurrent steps:\n${stepsText}\n\nUser's request: ${userRequest}\n\nReturn the complete updated step list.`;
-
-  const response = await openai.responses.create({
-    model: "gpt-4o-mini",
-    input: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userMessage },
-    ],
-    text: {
-      format: {
-        type: "json_schema",
-        name: "step_edit",
-        strict: true,
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            steps: {
-              type: "array",
-              items: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  emoji: { type: "string" },
-                  action: { type: "string" },
-                  explanation: { type: "string" },
-                },
-                required: ["emoji", "action", "explanation"],
-              },
-            },
-          },
-          required: ["steps"],
-        },
-      },
-    },
-  });
-
-  const llmSteps = (JSON.parse(response.output_text) as { steps: DecomposedStep[] }).steps;
-
-  if (!isPartial) return llmSteps;
-
-  // Splice LLM replacements into the original array at the position of selected steps.
-  // Non-selected steps are taken directly from currentSteps — LLM never touched them.
-  const selectedSet = new Set(selectedIndices);
-  const result: DecomposedStep[] = [];
-  let inserted = false;
-
-  for (let i = 0; i < currentSteps.length; i++) {
-    if (selectedSet.has(i)) {
-      if (!inserted) {
-        // Insert all LLM-returned replacements at the first selected position
-        result.push(...llmSteps);
-        inserted = true;
-      }
-      // Skip remaining selected steps (replaced by llmSteps above)
-    } else {
-      result.push(currentSteps[i]);
-    }
+  if (!hasApiBaseUrl()) {
+    throw new Error("Stepwise API server is not configured.");
   }
 
-  return result;
+  const result = await postJson<{ steps: DecomposedStep[] }>("/api/edit-steps", {
+    goalTitle,
+    currentSteps,
+    selectedIndices,
+    userRequest,
+  });
+
+  return result.steps;
+}
+
+export async function breakStepIntoSmallerActions(
+  goalTitle: string,
+  currentSteps: DecomposedStep[],
+  selectedIndex: number
+): Promise<DecomposedStep[]> {
+  const target = currentSteps[selectedIndex];
+  if (!target) {
+    throw new Error("Step not found.");
+  }
+
+  try {
+    return await editSteps(
+      goalTitle,
+      currentSteps,
+      [selectedIndex],
+      "Break this step into 2-3 much smaller actions for a low-energy user who feels stuck right now. Keep them sequential, concrete, and easy to start in under 2 minutes each."
+    );
+  } catch (err) {
+    console.warn("[Stepwise] Step breakdown failed. Using local fallback.", err);
+    return mockBreakStepIntoSmallerActions(target);
+  }
 }
