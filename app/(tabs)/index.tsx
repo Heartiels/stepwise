@@ -30,6 +30,8 @@ const HINTS = [
   "Staring at my desk, still not starting the assignment.",
 ];
 
+const TEXT_IDLE = "Break it down!";
+
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
@@ -38,6 +40,13 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [hintIndex, setHintIndex] = useState(0);
   const hintOpacity = useRef(new Animated.Value(1)).current;
+
+  // ── Button animation state ────────────────────────────────────────────────
+  const [displayChars, setDisplayChars] = useState<string[]>(TEXT_IDLE.split(""));
+  const starRotation = useRef(new Animated.Value(0)).current;
+  const starScale = useRef(new Animated.Value(1)).current;
+  const spinAnim = useRef<{ stop: () => void; start: (cb?: Animated.EndCallback) => void } | null>(null);
+  const isMountedRef = useRef(false);
 
   // Show modal every time the app opens
   useEffect(() => {
@@ -62,6 +71,68 @@ export default function HomeScreen() {
     }, 3000);
     return () => clearInterval(interval);
   }, [hintOpacity]);
+
+  // Letter-by-letter animation: only runs while loading, loops "Breaking..." indefinitely
+  useEffect(() => {
+    if (!loading) {
+      setDisplayChars(TEXT_IDLE.split(""));
+      return;
+    }
+
+    const target = "Breaking...";
+    const targetArr = target.split("");
+    let cancelled = false;
+    let charIv: ReturnType<typeof setInterval> | null = null;
+
+    function startLoop() {
+      if (cancelled) return;
+      let idx = 0;
+      setDisplayChars([]);
+      charIv = setInterval(() => {
+        if (cancelled) { clearInterval(charIv!); return; }
+        const i = idx++;
+        setDisplayChars(() => targetArr.slice(0, i + 1));
+        if (idx >= targetArr.length) {
+          clearInterval(charIv!);
+          setTimeout(startLoop, 400);
+        }
+      }, 80);
+    }
+
+    startLoop();
+    return () => {
+      cancelled = true;
+      if (charIv) clearInterval(charIv);
+    };
+  }, [loading]);
+
+  // Star spin while loading, bounce on completion
+  useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
+    if (loading) {
+      starRotation.setValue(0);
+      spinAnim.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(starRotation, { toValue: -8, duration: 300, useNativeDriver: true }),
+          Animated.timing(starRotation, { toValue: 2, duration: 200, useNativeDriver: true }),
+          Animated.timing(starRotation, { toValue: 0, duration: 150, useNativeDriver: true }),
+          Animated.delay(200),
+        ])
+      );
+      spinAnim.current.start();
+    } else {
+      spinAnim.current?.stop();
+      // shoot up then fall back
+      Animated.sequence([
+        Animated.timing(starRotation, { toValue: -12, duration: 150, useNativeDriver: true }),
+        Animated.timing(starRotation, { toValue: 2, duration: 100, useNativeDriver: true }),
+        Animated.timing(starRotation, { toValue: 0, duration: 80, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [loading]);
 
   async function handleDecompose() {
     const trimmed = goal.trim();
@@ -95,6 +166,8 @@ export default function HomeScreen() {
       setLoading(false);
     }
   }
+
+  const rocketY = starRotation; // used as translateY (px)
 
   return (
     <View style={styles.screen}>
@@ -164,10 +237,17 @@ export default function HomeScreen() {
             <Pressable
               onPress={handleDecompose}
               disabled={loading}
-              style={[styles.submitBtn, loading && { opacity: 0.6 }]}
+              className={`flex-row items-center justify-center gap-2 rounded-2xl py-4 px-6 ${loading ? "bg-zinc-700" : "bg-zinc-900"}`}
+              style={({ pressed }) => ({
+                opacity: loading ? 0.85 : pressed ? 0.72 : 1,
+                transform: pressed && !loading ? [{ scale: 0.97 }] : [],
+              })}
             >
-              <Text style={styles.submitBtnText}>
-                {loading ? "Breaking it down…" : "Break it down! 🚀"}
+              <Animated.View style={{ transform: [{ translateY: rocketY }, { scale: starScale }] }}>
+                <Ionicons name="rocket" size={16} color="#facc15" />
+              </Animated.View>
+              <Text className="text-white text-base font-bold tracking-wide">
+                {displayChars.join("")}
               </Text>
             </Pressable>
           </View>
