@@ -30,6 +30,7 @@ import {
 import { breakStepIntoSmallerActions, editSteps } from "../../src/services/openai";
 import { FocusSessionSheet } from "../../components/focus-session-sheet";
 import { FloatToast } from "../../components/step-toast";
+import { SharePreviewSheet } from "../../components/share-sheet";
 
 const MID_MESSAGES = [
   "Nice work!",
@@ -237,6 +238,13 @@ export default function TaskDetail() {
   }
 
   const [menuVisible, setMenuVisible] = useState(false);
+  const [shareMenuVisible, setShareMenuVisible] = useState(false);
+  const [shareMode, setShareMode] = useState<"text" | "image" | null>(null);
+
+  function openShare(mode: "text" | "image") {
+    setShareMenuVisible(false);
+    setShareMode(mode);
+  }
 
   // ── Keyboard height ────────────────────────────────────────────────────────
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -547,27 +555,53 @@ export default function TaskDetail() {
         />
       )}
 
+      <SharePreviewSheet
+        visible={shareMode !== null}
+        mode={shareMode ?? "text"}
+        onClose={() => setShareMode(null)}
+        goalTitle={task?.title ?? ""}
+        subtasks={subtasks}
+      />
+
       <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
         <Ionicons name="chevron-back" size={22} color="#18181b" />
         <Text style={styles.backText}>Goals</Text>
       </Pressable>
 
-      <Pressable onPress={() => setMenuVisible((v) => !v)} style={styles.moreBtn} hitSlop={8}>
-        <View style={styles.moreCircle}>
-          <Ionicons name="ellipsis-horizontal" size={16} color="#18181b" />
+      <View style={styles.topRightRow}>
+        <Pressable onPress={() => { setMenuVisible(false); setShareMenuVisible((v) => !v); }} hitSlop={8} style={styles.moreCircle}>
+          <Ionicons name="share-outline" size={18} color="#18181b" />
+        </Pressable>
+        <Pressable onPress={() => { setShareMenuVisible(false); setMenuVisible((v) => !v); }} hitSlop={8} style={styles.moreCircle}>
+          <Ionicons name="ellipsis-horizontal" size={18} color="#18181b" />
+        </Pressable>
+      </View>
+
+      {(menuVisible || shareMenuVisible) && (
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={() => { setMenuVisible(false); setShareMenuVisible(false); }} />
+      )}
+
+      {shareMenuVisible && (
+        <View style={[styles.dropdownMenu, { right: 56 }]}>
+          <Pressable style={styles.dropdownItem} onPress={() => openShare("text")}>
+            <Ionicons name="document-text-outline" size={16} color="#18181b" />
+            <Text style={styles.dropdownItemText}>Share as Text</Text>
+          </Pressable>
+          <View style={styles.dropdownDivider} />
+          <Pressable style={styles.dropdownItem} onPress={() => openShare("image")}>
+            <Ionicons name="image-outline" size={16} color="#18181b" />
+            <Text style={styles.dropdownItemText}>Share as Image</Text>
+          </Pressable>
         </View>
-      </Pressable>
+      )}
 
       {menuVisible && (
-        <>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setMenuVisible(false)} />
-          <View style={styles.dropdownMenu}>
-            <Pressable style={styles.dropdownItem} onPress={enterEditMode}>
-              <Ionicons name="sparkles-outline" size={16} color="#18181b" />
-              <Text style={styles.dropdownItemText}>AI Rewrite</Text>
-            </Pressable>
-          </View>
-        </>
+        <View style={styles.dropdownMenu}>
+          <Pressable style={styles.dropdownItem} onPress={enterEditMode}>
+            <Ionicons name="sparkles-outline" size={16} color="#18181b" />
+            <Text style={styles.dropdownItemText}>AI Rewrite</Text>
+          </Pressable>
+        </View>
       )}
 
       <ScrollView
@@ -915,6 +949,10 @@ const styles = StyleSheet.create({
   backText: { fontSize: 16, color: "#18181b", fontWeight: "500" },
 
   moreBtn: { position: "absolute", top: 52, right: 16, zIndex: 10 },
+  topRightRow: {
+    position: "absolute", top: 52, right: 16, zIndex: 10,
+    flexDirection: "row", alignItems: "center", gap: 8,
+  },
   moreCircle: {
     width: 32, height: 32, borderRadius: 16,
     backgroundColor: "#f4f4f5",
@@ -938,6 +976,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13, paddingHorizontal: 16,
   },
   dropdownItemText: { fontSize: 14, fontWeight: "500", color: "#18181b" },
+  dropdownDivider: { height: 1, backgroundColor: "#f4f4f5" },
 
   scroll: { paddingHorizontal: 20, paddingTop: 100, paddingBottom: 60 },
 

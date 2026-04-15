@@ -143,12 +143,17 @@ export function FocusSessionSheet({
 
               <View style={styles.actionRow}>
                 <Pressable style={[styles.actionBtn, styles.secondaryBtn, { flex: 1 }]} onPress={handleStuckPress} disabled={loadingStuck}>
-                  <Text style={styles.secondaryBtnText}>
-                    {loadingStuck ? "Helping..." : "I'm stuck"}
-                  </Text>
+                  {loadingStuck ? (
+                    <Text style={styles.secondaryBtnText}>Helping...</Text>
+                  ) : (
+                    <View style={{ alignItems: "center" }}>
+                      <Text style={styles.secondaryBtnText}>Feeling stuck?</Text>
+                      <Text style={[styles.secondaryBtnText, { fontSize: 18, fontWeight: "800" }]}>Get more steps</Text>
+                    </View>
+                  )}
                 </Pressable>
                 <Pressable style={[styles.actionBtn, styles.primaryBtnInline, { flex: 1 }]} onPress={handleDonePress}>
-                  <Text style={styles.primaryBtnText}>Done early</Text>
+                  <Text style={[styles.primaryBtnText, { fontSize: 18, fontWeight: "800" }]}>Done early</Text>
                 </Pressable>
               </View>
             </>
@@ -177,9 +182,14 @@ export function FocusSessionSheet({
                   onPress={handleStuckPress}
                   disabled={loadingStuck}
                 >
-                  <Text style={styles.secondaryBtnText}>
-                    {loadingStuck ? "Helping..." : "I'm stuck"}
-                  </Text>
+                  {loadingStuck ? (
+                    <Text style={styles.secondaryBtnText}>Helping...</Text>
+                  ) : (
+                    <View style={{ alignItems: "center" }}>
+                      <Text style={styles.secondaryBtnText}>Feeling stuck?</Text>
+                      <Text style={[styles.secondaryBtnText, { fontSize: 18, fontWeight: "800" }]}>Get more steps</Text>
+                    </View>
+                  )}
                 </Pressable>
               </View>
             </>
