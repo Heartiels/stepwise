@@ -2,6 +2,33 @@ import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
+function useTypingLoop(active: boolean, target = "Helping...") {
+  const [chars, setChars] = useState<string[]>([]);
+  useEffect(() => {
+    if (!active) { setChars([]); return; }
+    const arr = target.split("");
+    let cancelled = false;
+    let iv: ReturnType<typeof setInterval> | null = null;
+    function startLoop() {
+      if (cancelled) return;
+      let idx = 0;
+      setChars([]);
+      iv = setInterval(() => {
+        if (cancelled) { clearInterval(iv!); return; }
+        const i = idx++;
+        setChars(() => arr.slice(0, i + 1));
+        if (idx >= arr.length) {
+          clearInterval(iv!);
+          setTimeout(startLoop, 400);
+        }
+      }, 80);
+    }
+    startLoop();
+    return () => { cancelled = true; if (iv) clearInterval(iv); };
+  }, [active, target]);
+  return chars;
+}
+
 const DURATIONS = [5, 10, 15] as const;
 
 type FocusSessionSheetProps = {
@@ -33,6 +60,7 @@ export function FocusSessionSheet({
   const [remainingSeconds, setRemainingSeconds] = useState<number>(10 * 60);
   const [phase, setPhase] = useState<SessionPhase>("ready");
   const blockDurationSecondsRef = useRef<number>(10 * 60);
+  const helpingChars = useTypingLoop(loadingStuck);
 
   useEffect(() => {
     if (!visible) {
@@ -144,7 +172,7 @@ export function FocusSessionSheet({
               <View style={styles.actionRow}>
                 <Pressable style={[styles.actionBtn, styles.secondaryBtn, { flex: 1 }]} onPress={handleStuckPress} disabled={loadingStuck}>
                   {loadingStuck ? (
-                    <Text style={styles.secondaryBtnText}>Helping...</Text>
+                    <Text style={[styles.secondaryBtnText, { fontSize: 18, fontWeight: "800" }]}>{helpingChars.join("")}</Text>
                   ) : (
                     <View style={{ alignItems: "center" }}>
                       <Text style={styles.secondaryBtnText}>Feeling stuck?</Text>
@@ -183,7 +211,7 @@ export function FocusSessionSheet({
                   disabled={loadingStuck}
                 >
                   {loadingStuck ? (
-                    <Text style={styles.secondaryBtnText}>Helping...</Text>
+                    <Text style={[styles.secondaryBtnText, { fontSize: 18, fontWeight: "800" }]}>{helpingChars.join("")}</Text>
                   ) : (
                     <View style={{ alignItems: "center" }}>
                       <Text style={styles.secondaryBtnText}>Feeling stuck?</Text>

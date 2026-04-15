@@ -863,8 +863,14 @@ function StepCard({
                 color={subtask.is_today ? "#f97316" : "#a1a1aa"}
               />
             </Pressable>
-            <Pressable onPress={() => onStart(subtask)} hitSlop={8} style={styles.todayBtn}>
-              <Ionicons name="timer-outline" size={18} color="#a1a1aa" />
+            <Pressable
+              onPress={() => onStart(subtask)}
+              hitSlop={8}
+              style={({ pressed }) => [styles.todayBtn, pressed && styles.todayBtnPressed]}
+            >
+              {({ pressed }) => (
+                <Ionicons name="timer-outline" size={18} color={pressed ? "#f97316" : "#a1a1aa"} />
+              )}
             </Pressable>
           </View>
         )}
@@ -951,10 +957,10 @@ const styles = StyleSheet.create({
   moreBtn: { position: "absolute", top: 52, right: 16, zIndex: 10 },
   topRightRow: {
     position: "absolute", top: 52, right: 16, zIndex: 10,
-    flexDirection: "row", alignItems: "center", gap: 8,
+    flexDirection: "row", alignItems: "center", gap: 20,
   },
   moreCircle: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 38, height: 38, borderRadius: 19,
     backgroundColor: "#f4f4f5",
     alignItems: "center", justifyContent: "center",
   },
@@ -1027,6 +1033,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 2,
     flexShrink: 0,
+  },
+  todayBtnPressed: {
+    backgroundColor: "#fff7ed",
+    borderRadius: 999,
   },
   stepEmoji: { fontSize: 18, marginBottom: 2 },
   stepAction: { fontSize: 14, fontWeight: "600", color: "#18181b", lineHeight: 20 },

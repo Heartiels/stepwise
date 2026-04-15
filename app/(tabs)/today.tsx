@@ -243,8 +243,10 @@ function TodayCard({
           </Text>
         </View>
         <View style={styles.cardTopRight}>
-          <Pressable onPress={onStart} hitSlop={8}>
-            <Ionicons name="timer-outline" size={20} color="#a1a1aa" />
+          <Pressable onPress={onStart} hitSlop={8} style={({ pressed }) => [pressed && styles.timerBtnPressed]}>
+            {({ pressed }) => (
+              <Ionicons name="timer-outline" size={20} color={pressed ? "#f97316" : "#a1a1aa"} />
+            )}
           </Pressable>
           <Ionicons name="chevron-forward" size={16} color="#a1a1aa" />
         </View>
@@ -344,8 +346,12 @@ const styles = StyleSheet.create({
   cardTopRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 16,
     flexShrink: 0,
+  },
+  timerBtnPressed: {
+    backgroundColor: "#fff7ed",
+    borderRadius: 999,
   },
   taskMeta: {
     flex: 1,
