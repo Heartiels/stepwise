@@ -206,7 +206,7 @@ export default function ProfileScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <View style={styles.statTopRow}>
-              <Ionicons name="flame-outline" size={20} color="#f97316" />
+              <Ionicons name="flame-outline" size={16} color="#f97316" />
               <Text style={styles.statNumber}>{stats.streak}</Text>
             </View>
             <Text style={styles.statLabel}>Current Streak</Text>
@@ -214,7 +214,7 @@ export default function ProfileScreen() {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <View style={styles.statTopRow}>
-              <Ionicons name="bar-chart-outline" size={20} color="#3b82f6" />
+              <Ionicons name="bar-chart-outline" size={16} color="#3b82f6" />
               <Text style={styles.statNumber}>
                 {stats.completed}/{stats.total}
               </Text>
@@ -224,7 +224,7 @@ export default function ProfileScreen() {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <View style={styles.statTopRow}>
-              <Ionicons name="star-outline" size={20} color="#eab308" />
+              <Ionicons name="star-outline" size={16} color="#eab308" />
               <Text style={styles.statNumber}>{stats.points}</Text>
             </View>
             <Text style={styles.statLabel}>XP</Text>
@@ -452,19 +452,20 @@ const styles = StyleSheet.create({
     borderColor: "#e4e4e7",
     overflow: "hidden",
   },
-  statItem: { flex: 1, paddingVertical: 18, paddingHorizontal: 16, gap: 6 },
-  statTopRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  statDivider: { width: 1, backgroundColor: "#f0f0f0", marginVertical: 12 },
-  statNumber: { fontSize: 24, fontWeight: "800", color: "#18181b" },
-  statLabel: { fontSize: 12, color: "#71717a", fontWeight: "500" },
+  statItem: { flex: 1, paddingVertical: 12, paddingHorizontal: 12, gap: 4 },
+  statTopRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  statDivider: { width: 1, backgroundColor: "#f0f0f0", marginVertical: 8 },
+  statNumber: { fontSize: 18, fontWeight: "800", color: "#18181b" },
+  statLabel: { fontSize: 11, color: "#71717a", fontWeight: "500" },
   focusCard: {
-    marginTop: 14,
+    marginTop: 10,
     backgroundColor: "#fff7ed",
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#fed7aa",
-    padding: 16,
-    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    gap: 2,
   },
   focusCardHeader: {
     flexDirection: "row",
@@ -472,21 +473,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   focusCardTitle: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "700",
     color: "#9a3412",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   focusCardValue: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: "800",
     color: "#18181b",
   },
   focusCardSub: {
-    fontSize: 13,
+    fontSize: 11,
     color: "#9a3412",
-    lineHeight: 18,
+    lineHeight: 16,
   },
 
   // Heatmap

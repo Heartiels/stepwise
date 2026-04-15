@@ -30,7 +30,6 @@ import {
 import { breakStepIntoSmallerActions, editSteps } from "../../src/services/openai";
 import { FocusSessionSheet } from "../../components/focus-session-sheet";
 import { FloatToast } from "../../components/step-toast";
-import { formatFocusDurationLabel } from "../../src/tasks/focus";
 
 const MID_MESSAGES = [
   "Nice work!",
@@ -56,6 +55,22 @@ type ActiveSession = {
 const INSERT_ICONS = ["⭐", "🌟", "✨", "🔧", "🛠️", "🔩", "🎯", "💡", "📌", "📍"];
 function pickIcon() {
   return INSERT_ICONS[Math.floor(Math.random() * INSERT_ICONS.length)];
+}
+
+const INSERT_EXPLANATIONS = [
+  "Even a small move here builds momentum for everything that follows.",
+  "Done imperfectly beats not done at all — just make a start.",
+  "Give yourself 5 minutes on this. You might surprise yourself.",
+  "This step doesn't need to be perfect, just completed.",
+  "Low energy? Do the minimum viable version and move on.",
+  "Getting through this unlocks the next step.",
+  "Trust the process — small steps compound into real progress.",
+  "Resistance is highest before you start. Push through the first minute.",
+  "Checking this off will feel better than you expect.",
+  "Keep it simple: one action, one result.",
+];
+function pickExplanation() {
+  return INSERT_EXPLANATIONS[Math.floor(Math.random() * INSERT_EXPLANATIONS.length)];
 }
 
 export default function TaskDetail() {
@@ -222,11 +237,6 @@ export default function TaskDetail() {
   }
 
   const [menuVisible, setMenuVisible] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-  const [selectedStepIds, setSelectedStepIds] = useState<Set<string>>(new Set());
-  const [editInput, setEditInput] = useState("");
-  const [inputFocused, setInputFocused] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);
 
   // ── Keyboard height ────────────────────────────────────────────────────────
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -453,7 +463,7 @@ export default function TaskDetail() {
     next.splice(insertAt, 0, {
       id: "__new__",
       task_id: task.id,
-      emoji: icon, action: text, explanation: "",
+      emoji: icon, action: text, explanation: pickExplanation(),
       ord: insertAt, status: "todo", completed_at: null,
       is_today: 0, xp: 0, focus_seconds: 0, focus_sessions: 0,
     } as unknown as Subtask);
@@ -777,9 +787,8 @@ function StepCard({
   }
 
   const renderRightAction = () => (
-    <View style={[styles.swipeAction, done && styles.swipeActionUndo]}>
-      <Ionicons name={done ? "refresh-outline" : "close"} size={22} color="#fff" />
-      <Text style={styles.swipeActionText}>{done ? "Undo" : "Done"}</Text>
+    <View style={styles.swipeHint}>
+      <Ionicons name={done ? "refresh-outline" : "checkmark"} size={20} color={done ? "#a1a1aa" : "#22c55e"} />
     </View>
   );
 
@@ -812,39 +821,20 @@ function StepCard({
           )}
         </View>
         {!editMode && !done && (
-          <Pressable
-            onPress={() => onToggleToday(subtask.id)}
-            hitSlop={8}
-            style={styles.todayBtn}
-          >
-            <Ionicons
-              name={subtask.is_today ? "bookmark" : "bookmark-outline"}
-              size={18}
-              color={subtask.is_today ? "#f97316" : "#a1a1aa"}
-            />
-          </Pressable>
+          <View style={styles.sideIcons}>
+            <Pressable onPress={() => onToggleToday(subtask.id)} hitSlop={8} style={styles.todayBtn}>
+              <Ionicons
+                name={subtask.is_today ? "bookmark" : "bookmark-outline"}
+                size={18}
+                color={subtask.is_today ? "#f97316" : "#a1a1aa"}
+              />
+            </Pressable>
+            <Pressable onPress={() => onStart(subtask)} hitSlop={8} style={styles.todayBtn}>
+              <Ionicons name="timer-outline" size={18} color="#a1a1aa" />
+            </Pressable>
+          </View>
         )}
       </View>
-
-      {subtask.focus_sessions > 0 && (
-        <View style={styles.focusMetaRow}>
-          <View style={styles.focusMetaBadge}>
-            <Ionicons name="timer-outline" size={12} color="#c2410c" />
-            <Text style={styles.focusMetaText}>
-              {formatFocusDurationLabel(subtask.focus_seconds)} · {subtask.focus_sessions} session{subtask.focus_sessions > 1 ? "s" : ""}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {!editMode && !done && (
-        <View style={styles.stepUtilityRow}>
-          <Pressable onPress={() => onStart(subtask)} style={styles.startNowBtn}>
-            <Ionicons name="flash" size={14} color="#c2410c" />
-            <Text style={styles.startNowBtnText}>Start now</Text>
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 
@@ -980,14 +970,19 @@ const styles = StyleSheet.create({
   },
   stepBadgeText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   stepBadgeDone: { backgroundColor: "#ef4444" },
-  swipeAction: {
-    backgroundColor: "#ef4444", justifyContent: "center", alignItems: "center",
-    width: 80, borderRadius: 16, gap: 3,
+  swipeHint: {
+    justifyContent: "center",
+    alignItems: "center",
+    width: 48,
   },
-  swipeActionUndo: { backgroundColor: "#a1a1aa" },
-  swipeActionText: { color: "#fff", fontSize: 11, fontWeight: "600" },
   stepTextDone: { color: "#c4c4c4", textDecorationLine: "line-through" },
   stepContent: { flex: 1, gap: 2 },
+  sideIcons: {
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 14,
+    flexShrink: 0,
+  },
   todayBtn: {
     width: 28,
     alignItems: "center",
@@ -997,43 +992,6 @@ const styles = StyleSheet.create({
   stepEmoji: { fontSize: 18, marginBottom: 2 },
   stepAction: { fontSize: 14, fontWeight: "600", color: "#18181b", lineHeight: 20 },
   stepExplanation: { fontSize: 12, color: "#71717a", lineHeight: 18, marginTop: 3 },
-  stepUtilityRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-  startNowBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#fff7ed",
-    borderWidth: 1,
-    borderColor: "#fed7aa",
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  startNowBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#c2410c",
-  },
-  focusMetaRow: {
-    flexDirection: "row",
-  },
-  focusMetaBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#fff7ed",
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  focusMetaText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#c2410c",
-  },
 
   tipsCard: {
     backgroundColor: "#fff", borderRadius: 16, borderWidth: 1,

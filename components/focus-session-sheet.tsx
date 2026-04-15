@@ -1,6 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 
 const DURATIONS = [5, 10, 15] as const;
 
@@ -95,12 +95,7 @@ export function FocusSessionSheet({
 
         <View style={styles.sheet}>
           <View style={styles.header}>
-            <View style={styles.headerText}>
-              <Text style={styles.eyebrow}>Start now</Text>
-              <Text style={styles.taskTitle} numberOfLines={1}>
-                {taskTitle}
-              </Text>
-            </View>
+            <Text style={styles.eyebrow}>Focus</Text>
             <Pressable onPress={onClose} hitSlop={8} style={styles.closeBtn}>
               <Ionicons name="close" size={18} color="#71717a" />
             </Pressable>
@@ -147,12 +142,12 @@ export function FocusSessionSheet({
               </View>
 
               <View style={styles.actionRow}>
-                <Pressable style={[styles.actionBtn, styles.secondaryBtn]} onPress={handleStuckPress} disabled={loadingStuck}>
+                <Pressable style={[styles.actionBtn, styles.secondaryBtn, { flex: 1 }]} onPress={handleStuckPress} disabled={loadingStuck}>
                   <Text style={styles.secondaryBtnText}>
                     {loadingStuck ? "Helping..." : "I'm stuck"}
                   </Text>
                 </Pressable>
-                <Pressable style={[styles.actionBtn, styles.primaryBtnInline]} onPress={handleDonePress}>
+                <Pressable style={[styles.actionBtn, styles.primaryBtnInline, { flex: 1 }]} onPress={handleDonePress}>
                   <Text style={styles.primaryBtnText}>Done early</Text>
                 </Pressable>
               </View>
@@ -216,21 +211,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
-  headerText: {
-    flex: 1,
-    gap: 4,
-  },
   eyebrow: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#f97316",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  taskTitle: {
-    fontSize: 18,
+    fontSize: 26,
     fontWeight: "800",
-    color: "#18181b",
+    color: "#f97316",
+    letterSpacing: -0.3,
   },
   closeBtn: {
     width: 32,
@@ -246,7 +231,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#fed7aa",
     padding: 16,
-    gap: 8,
+    gap: 4,
   },
   stepAction: {
     fontSize: 18,

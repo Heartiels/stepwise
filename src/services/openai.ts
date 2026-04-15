@@ -127,12 +127,27 @@ export async function breakStepIntoSmallerActions(
   }
 
   try {
-    return await editSteps(
+    // editSteps returns the full updated list; extract only the replacement steps
+    const fullList = await editSteps(
       goalTitle,
       currentSteps,
       [selectedIndex],
-      "Break this step into 2-3 much smaller actions for a low-energy user who feels stuck right now. Keep them sequential, concrete, and easy to start in under 2 minutes each."
+      `The user is stuck on the marked step and needs to restart with zero friction. Break it into 2-3 micro-actions that remove all cognitive pressure and make starting feel almost automatic.
+
+Rules:
+- Stay tightly connected to the overall goal and the surrounding steps — every micro-action must feel like a natural part of the same plan. Never introduce unrelated tasks.
+- The first micro-action must be a direct physical action completable in under 60 seconds (e.g. open the file, pick up the item, write one sentence). No thinking required — just move.
+- Each subsequent action should be completable in under 3 minutes and move the user visibly closer to completing the original step.
+- Use verb-first language. Be hyper-specific — not "work on it" but "write the first sentence of the email."
+- The explanation for each action must name the immediate reward or why it removes the barrier (e.g. "Once the file is open, starting feels 10x easier.").
+- Never suggest "set a timer" or vague motivational steps. Every action must produce a visible, tangible result.
+- Assume the user has very low energy right now. Make each action feel embarrassingly small and easy.`
     );
+    const numReplacements = fullList.length - (currentSteps.length - 1);
+    if (numReplacements > 0) {
+      return fullList.slice(selectedIndex, selectedIndex + numReplacements);
+    }
+    return mockBreakStepIntoSmallerActions(target);
   } catch (err) {
     console.warn("[Stepwise] Step breakdown failed. Using local fallback.", err);
     return mockBreakStepIntoSmallerActions(target);

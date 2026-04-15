@@ -34,8 +34,20 @@ You focus on "zero-friction start" and "actionability." Your goal is to help use
 - Do NOT include a “set a timer” step unless timing is genuinely critical to the goal. Avoid generic productivity filler steps.`;
 
 const EDIT_SYSTEM_PROMPT = `You are a productivity coach helping a user refine steps of an action plan.
-You may return more or fewer steps than provided (e.g. break one step into multiple).
-Keep each explanation to 1-2 sentences max. Return ONLY valid JSON.`;
+
+【Context awareness】
+- You will always receive the full step list and the overall goal. Read them carefully before responding.
+- Every step you produce must stay coherent with the goal and the surrounding steps. Never introduce actions that are off-topic or disconnected from what comes before and after.
+- The marked step(s) exist within a larger plan — your replacements must feel like a natural part of that plan, not standalone advice.
+
+【Output rules】
+- You may return more or fewer steps than the marked ones (e.g. break one into multiple, or combine multiple into one).
+- Each step has three separate fields:
+  • "action": a single verb-first sentence only — no newlines, no dashes, no explanation embedded here.
+  • "explanation": 1-2 sentences explaining the immediate reward or why this lowers the barrier. Keep this in explanation only, never inside action.
+  • "emoji": exactly one emoji — never combine multiple.
+- Language: concise, actionable, suitable for a low-energy user. No vague filler steps.
+- Return ONLY valid JSON.`;
 
 const taskDecompositionSchema = {
   type: "object",
@@ -182,7 +194,13 @@ async function callResponsesApi(input, schemaName, schema) {
   }
 
   const parsed = JSON.parse(payload);
-  const outputText = parsed.output_text;
+
+  // Responses API: output[0].content[0].text
+  const outputText =
+    parsed.output_text ??
+    parsed.output?.[0]?.content?.[0]?.text ??
+    parsed.output?.[0]?.content?.[0]?.value;
+
   if (typeof outputText !== "string" || !outputText.trim()) {
     throw new Error("OpenAI returned an empty response.");
   }
@@ -247,17 +265,20 @@ async function handleEditSteps(request, response) {
   }
 
   const isPartial = selectedIndices.length > 0;
-  const stepsToEdit = isPartial
-    ? selectedIndices.map((index) => currentSteps[index]).filter(Boolean)
-    : currentSteps;
+  const selectedSet = new Set(selectedIndices);
 
-  const stepsText = stepsToEdit
-    .map((step, index) => `Step ${index + 1}: ${step.emoji} ${step.action} — ${step.explanation}`)
+  // Always pass the full step list so the LLM has complete context.
+  // Mark the steps to modify so the LLM knows which ones to replace.
+  const allStepsText = currentSteps
+    .map((step, index) => {
+      const marker = selectedSet.has(index) ? " ← MODIFY THIS" : "";
+      return `Step ${index + 1}${marker}: ${step.emoji} ${step.action} — ${step.explanation}`;
+    })
     .join("\n");
 
   const userMessage = isPartial
-    ? `Goal: "${goalTitle}"\n\nStep(s) to modify:\n${stepsText}\n\nUser's request: ${userRequest}\n\nReturn the replacement step(s).`
-    : `Goal: "${goalTitle}"\n\nCurrent steps:\n${stepsText}\n\nUser's request: ${userRequest}\n\nReturn the complete updated step list.`;
+    ? `Goal: "${goalTitle}"\n\nFull step list (keep all steps in mind for context and coherence):\n${allStepsText}\n\nUser's request for the marked step(s): ${userRequest}\n\nReturn ONLY the replacement step(s) for the marked ones. Do not return the full list.`
+    : `Goal: "${goalTitle}"\n\nCurrent steps:\n${allStepsText}\n\nUser's request: ${userRequest}\n\nReturn the complete updated step list.`;
 
   const result = await callResponsesApi(
     [
@@ -268,7 +289,25 @@ async function handleEditSteps(request, response) {
     stepEditSchema
   );
 
-  sendJson(response, 200, result);
+  // Sanitize: action must be a single line (strip anything after the first newline or " — ")
+  const sanitizedSteps = result.steps.map((s) => ({
+    ...s,
+    action: s.action.split(/\n|—/)[0].trim(),
+  }));
+
+  if (isPartial) {
+    // Splice the replacement steps back into the full list at the selected positions
+    const minIndex = Math.min(...selectedIndices);
+    const fullSteps = [...currentSteps];
+    const sortedDesc = [...selectedIndices].sort((a, b) => b - a);
+    for (const idx of sortedDesc) {
+      fullSteps.splice(idx, 1);
+    }
+    fullSteps.splice(minIndex, 0, ...sanitizedSteps);
+    sendJson(response, 200, { steps: fullSteps });
+  } else {
+    sendJson(response, 200, { steps: sanitizedSteps });
+  }
 }
 
 async function handleTranscribe(request, response) {

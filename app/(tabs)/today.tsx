@@ -15,7 +15,6 @@ import {
 import { breakStepIntoSmallerActions } from "../../src/services/openai";
 import { FocusSessionSheet } from "../../components/focus-session-sheet";
 import { FloatToast } from "../../components/step-toast";
-import { formatFocusDurationLabel } from "../../src/tasks/focus";
 
 const MID_MESSAGES = [
   "Nice work!", "Keep it up!", "One step closer!",
@@ -243,7 +242,12 @@ function TodayCard({
             {subtask.task_title}
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color="#a1a1aa" />
+        <View style={styles.cardTopRight}>
+          <Pressable onPress={onStart} hitSlop={8}>
+            <Ionicons name="timer-outline" size={20} color="#a1a1aa" />
+          </Pressable>
+          <Ionicons name="chevron-forward" size={16} color="#a1a1aa" />
+        </View>
       </View>
 
       <Text style={styles.stepAction}>
@@ -251,21 +255,10 @@ function TodayCard({
         {action}
       </Text>
       {!!explanation && <Text style={styles.stepExplanation}>{explanation}</Text>}
-      {subtask.focus_sessions > 0 && (
-        <View style={styles.focusMetaBadge}>
-          <Ionicons name="timer-outline" size={12} color="#c2410c" />
-          <Text style={styles.focusMetaText}>
-            {formatFocusDurationLabel(subtask.focus_seconds)} · {subtask.focus_sessions} session{subtask.focus_sessions > 1 ? "s" : ""}
-          </Text>
-        </View>
-      )}
 
       <View style={styles.actionRow}>
         <Pressable onPress={onRemove} style={[styles.actionBtn, styles.secondaryBtn]}>
           <Text style={styles.secondaryBtnText}>Remove</Text>
-        </Pressable>
-        <Pressable onPress={onStart} style={[styles.actionBtn, styles.startBtn]}>
-          <Text style={styles.startBtnText}>Start now</Text>
         </Pressable>
         <Pressable
           onPress={() => {
@@ -348,6 +341,12 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 12,
   },
+  cardTopRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+  },
   taskMeta: {
     flex: 1,
     gap: 8,
@@ -387,22 +386,6 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: "#71717a",
   },
-  focusMetaBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: 6,
-    marginTop: 10,
-    backgroundColor: "#fff7ed",
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  focusMetaText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#c2410c",
-  },
   actionRow: {
     flexDirection: "row",
     gap: 10,
@@ -423,16 +406,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#71717a",
-  },
-  startBtn: {
-    backgroundColor: "#fff7ed",
-    borderWidth: 1,
-    borderColor: "#fed7aa",
-  },
-  startBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#c2410c",
   },
   primaryBtn: {
     backgroundColor: "#18181b",
